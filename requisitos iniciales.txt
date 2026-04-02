@@ -1,0 +1,151 @@
+Actúa como arquitecto de software senior y product lead.
+
+Objetivo:
+
+Diseñar y especificar un sistema completo llamado TierList Global, una plataforma de debates y votación pública, integrada con SVP (Sistema de Votos y Puntos), con enfoque productivo y escalable.
+
+Contexto funcional:
+
+1) No es un tierlist personal; es una plataforma global multiusuario.
+
+2) Cualquier usuario registrado puede abrir debates temáticos (ej.: mejor noticia, personalidad destacada, imagen de la semana, hito mensual/anual).
+
+3) Los usuarios votan, comentan y generan feedback.
+
+4) Todos los resultados deben quedar auditados y trazables.
+
+5) El sistema debe integrarse con SVP para enviar las horas de actividad.
+
+6) Debe soportar integración futura con inventario, recompensas y objetos globales/locales.
+
+Entregables requeridos:
+
+1) Arquitectura completa (frontend, backend, DB, colas/eventos opcionales, observabilidad).
+
+2) Estructura de carpetas profesional.
+
+3) Diseño MVC + API y orientación a objetos donde aplique.
+
+4) Modelo de datos (tablas principales, relaciones, índices, auditoría).
+
+5) Contrato API (endpoints, payloads, respuestas, códigos de error).
+
+6) Flujo de seguridad (auth, autorización por roles, validación, anti-fraude, idempotencia, rate limiting, firma HMAC).
+
+7) Flujo de integración con SVP:
+
+   - formato de eventos de resultados
+
+   - validación y procesamiento
+
+   - registro transaccional en DB
+
+8) Estrategia de pruebas:
+
+   - unitarias
+
+   - integración
+
+   - e2e
+
+   - concurrencia
+
+9) Plan de despliegue y CI/CD.
+
+10) Roadmap por fases (MVP -> beta -> producción).
+
+Restricciones técnicas:
+
+1) Código limpio, manejo explícito de errores y buenas prácticas.
+
+2) Comentarios solo cuando aporten contexto no obvio.
+
+3) Tipado estricto.
+
+4) Preparado para escalar multi-tenant.
+
+5) Documentación clara para equipo técnico y producto.
+
+Formato de salida:
+
+1) Resumen ejecutivo.
+
+2) Arquitectura propuesta.
+
+3) Estructura de directorios.
+
+4) Modelo de datos.
+
+5) API design.
+
+6) Seguridad.
+
+7) Plan de implementación por sprints.
+
+8) Riesgos y mitigaciones.
+
+Ajuste de alcance: este proyecto es TierList Global integrado con SVP.
+
+Reglas de negocio obligatorias:
+
+1) La fórmula principal de puntos SVP es:
+
+   puntosSPV = horasActividad * votosTotales
+
+   donde votosTotales = votosLocales + votosGlobales. // De esto se encarga SVP externo.
+
+2) "Score" no es la fórmula base de puntos; es una señal de logro/evento de gameplay.
+
+3) Los logros se definen por votación global y pueden desbloquear objetos.
+
+4) Los objetos del inventario pueden ser estáticos o dinámicos (transformar, destruir, transferir, revalorizar).
+
+5) Si un objeto llegase a equivaler puntos, toda mutación del objeto debe reflejarse en ledger de puntos con trazabilidad.
+
+6) La revalorización de objetos por actividad debe ser configurable por reglas (policy engine), no hardcodeada.
+
+Quiero que priorices:
+
+1) Arquitectura del TierList (debates, votación, resultados, moderación, auditoría).
+
+2) Contrato API de integración con SVP por eventos (no acceso directo a DB externa).
+
+3) Modelo de datos de eventos + logros + recompensas.
+
+4) Seguridad de integración (idempotencia, firma HMAC, anti-replay, rate limit).
+
+5) Roadmap por fases MVP->Producción.
+
+Esquema del contrato Api
+
+{
+
+  "eventId": "uuid",
+
+  "sourceApp": "tierlist-global",
+
+  "sourceEnv": "prod",
+
+  "userId": "uuid",
+
+  "activityType": "vote_result",
+
+  "activityId": "debate_2026_03_08_best_news",
+
+  "score": 125,
+
+  "unit": "liveops_points",
+
+  "metadata": {
+
+    "rank": 1,
+
+    "votesReceived": 2400,
+
+    "category": "news"
+
+  },
+
+  "occurredAt": "2026-03-08T15:30:00Z"
+
+}
