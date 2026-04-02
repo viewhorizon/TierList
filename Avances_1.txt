@@ -1,0 +1,31 @@
+### Áreas que necesitan trabajo antes de producción
+
+**Autenticación incompleta.** El módulo `auth` existe en la estructura pero no tiene implementación. En el MVP actual no hay JWT funcionando, lo que significa que cualquier endpoint puede ser llamado sin identidad verificada. Es el gap más crítico para cualquier demo pública.
+
+**El Policy Engine usa `new Function()`**, que ejecuta strings como código JavaScript. Funciona y está acotado con validación de caracteres, pero en producción bajo carga o con políticas complejas es un vector de riesgo. La solución correcta es una librería de evaluación de expresiones como `expr-eval` o `jsep`, que son evaluadores seguros sin acceso al runtime.
+
+**No hay rate limiting implementado.** El PRD lo menciona (Redis + Rate Limiting dinámico por IP), el `docker-compose` levanta Redis, pero el middleware no está conectado. En un sistema de votación pública esto es una omisión operativa importante.
+
+**El frontend usa datos mock en la mayoría de las páginas.** Rankings, Feedback, Inventario, Notificaciones y Admin muestran datos hardcodeados. Las páginas están bien estructuradas y la navegación es real, pero la integración con los endpoints del backend es parcial. Solo Explorar y DebateDetail tienen consultas reales con React Query.
+
+**Falta cobertura de tests de integración.** Los tests unitarios que existen son buenos y correctos, pero no hay tests de integración que verifiquen el flujo completo: crear debate → abrir → votar → cerrar → verificar que el evento SVP llegó al mock con la firma correcta.
+
+---
+
+### Post-planificación recomendada
+
+Sí, es necesaria. El MVP actual establece la arquitectura correcta y los contratos de integración. Lo que sigue lógicamente en tres fases:
+
+**Fase 1 — Completar el MVP (2–3 semanas):** implementar autenticación JWT completa, conectar el frontend a los endpoints reales, reemplazar `new Function()` en el Policy Engine, agregar rate limiting con Redis, y escribir los tests de integración del flujo de cierre de debate.
+
+**Fase 2 — Beta (1–2 meses):** incorporar WebSockets para que el ranking se actualice en tiempo real durante un debate activo, implementar el flujo de logros y emisión de objetos visible para el usuario final, agregar observabilidad básica (logs estructurados, métricas del dispatcher), y hacer pruebas de carga con 1.000+ votos concurrentes para validar el Sovereign Ledger bajo presión.
+
+**Fase 3 — Producción:** multi-tenancy, sharding del ledger por organización, validadores externos que puedan verificar la cadena HMAC de forma independiente, y las APIs públicas para que terceros construyan sobre el ecosistema.
+
+---
+
+### Sobre la misión y visión
+
+Las comprendo, y creo que son válidas. El problema que resuelven —que la opinión colectiva en internet no tiene infraestructura de integridad— es real. Cualquier sistema de ranking online actual puede ser manipulado sin dejar rastro. TierList Global propone que cada voto sea un evento firmado, encadenado y auditable externamente, lo que lo acerca más a un protocolo que a una aplicación.
+
+La pregunta estratégica que haría es: ¿quién es el auditor externo? El sistema construye una cadena de confianza interna muy robusta, pero para que el consenso sea verdaderamente soberano necesita que alguien ajeno al operador pueda verificar la cadena completa. Eso no está en el MVP y es lo que diferencia un sistema auditable de un sistema verdaderamente descentralizado. Es el próximo paso conceptual más importante del proyecto.
