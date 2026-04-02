@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { @apply bg-surface text-on-surface; }
+  h1, h2, h3, h4, h5, h6 { @apply font-headline; }
+}
+
+@layer components {
+  /* Ghost border fallback — DESIGN.md */
+  .ghost-border {
+    outline: 1px solid rgba(221, 226, 246, 0.15);
+  }
+
+  /* Status chips */
+  .chip-audited {
+    @apply text-tertiary bg-tertiary/10 text-xs font-bold px-2 py-1 rounded font-headline;
+  }
+  .chip-winner {
+    @apply text-secondary bg-secondary/10 text-xs font-bold px-2 py-1 rounded font-headline;
+  }
+
+  /* Glassmorphism card — DESIGN.md "Glass & Gradient" */
+  .glass-card {
+    background: rgba(58, 66, 85, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* Ledger entry animation */
+  .ledger-entry {
+    @apply animate-[ledgerIn_0.3s_ease-out];
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .tracking-headline { letter-spacing: -0.02em; }
+}

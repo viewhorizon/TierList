@@ -1,0 +1,110 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: tierlist_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tierlist_global
+      POSTGRES_USER: tierlist
+      POSTGRES_PASSWORD: tierlist_secret
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tierlist -d tierlist_global']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (Rate Limiting + Cache) ────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: tierlist_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── API Backend ──────────────────────────────────────────────
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: tierlist_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: tierlist
+      DB_PASSWORD: tierlist_secret
+      DB_NAME: tierlist_global
+      REDIS_URL: redis://redis:6379
+      SVP_ENDPOINT_URL: ${SVP_ENDPOINT_URL:-http://svp-mock:5000/v1/events}
+      SVP_HMAC_SECRET: ${SVP_HMAC_SECRET:-change_me_in_production_svp}
+      AUDIT_HMAC_SECRET: ${AUDIT_HMAC_SECRET:-change_me_in_production_audit}
+      VOTE_HMAC_SECRET: ${VOTE_HMAC_SECRET:-change_me_in_production_vote}
+      FRONTEND_URL: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production_jwt}
+    ports:
+      - '4000:4000'
+    volumes:
+      - ../apps/api/src:/app/src
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Frontend ─────────────────────────────────────────────────
+  web:
+    build:
+      context: ../apps/web-client
+      dockerfile: Dockerfile
+    container_name: tierlist_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: http://localhost:4000
+    ports:
+      - '3000:3000'
+
+  # ── SVP Mock (para desarrollo) ───────────────────────────────
+  svp-mock:
+    image: node:20-alpine
+    container_name: tierlist_svp_mock
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'const express=require(\"express\");
+        const app=express();
+        app.use(express.json());
+        app.post(\"/v1/events\",(req,res)=>{
+          console.log(\"[SVP Mock] Evento recibido:\",req.body.eventId);
+          res.json({status:\"ACKNOWLEDGED\",eventId:req.body.eventId,processedAt:new Date().toISOString()});
+        });
+        app.listen(5000,()=>console.log(\"SVP Mock en :5000\"));' > server.js &&
+        npm install express --silent &&
+        node server.js
+      "
+    ports:
+      - '5000:5000'
+
+volumes:
+  postgres_data:
