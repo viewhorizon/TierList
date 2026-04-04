@@ -1,0 +1,1391 @@
+﻿```markdown
+# TagFly v3.0 — Documentación Técnica de Integración
+
+
+> **Sistema de anotaciones visuales embebible**  
+> Vanilla JS (ES6+) | Archivo único HTML | Touch-first | Zero framework dependencies
+
+
+---
+
+
+## Tabla de Contenidos
+
+
+- [1. Visión General](#1-visión-general)
+- [2. Arquitectura](#2-arquitectura)
+- [3. Modelo de Datos](#3-modelo-de-datos)
+- [4. Dependencias](#4-dependencias)
+- [5. Inicio Rápido](#5-inicio-rápido)
+- [6. Estructura HTML Requerida](#6-estructura-html-requerida)
+- [7. API Pública](#7-api-pública)
+- [8. Sistema de Eventos (Hooks)](#8-sistema-de-eventos-hooks)
+- [9. Sincronización con Backend](#9-sincronización-con-backend)
+- [10. Sistema de Drag & Drop](#10-sistema-de-drag--drop)
+- [11. Sistema de Capas](#11-sistema-de-capas)
+- [12. Sistema de Colores](#12-sistema-de-colores)
+- [13. Plantillas](#13-plantillas)
+- [14. Formas y Estilos Visuales](#14-formas-y-estilos-visuales)
+- [15. Persistencia](#15-persistencia)
+- [16. Exportar / Importar](#16-exportar--importar)
+- [17. Selección Múltiple](#17-selección-múltiple)
+- [18. Variables CSS](#18-variables-css)
+- [19. Guía: Integración con Muro de Debates](#19-guía-integración-con-muro-de-debates)
+- [20. Referencia de Constantes](#20-referencia-de-constantes)
+- [21. Referencia de Funciones](#21-referencia-de-funciones)
+- [22. Limitaciones Conocidas](#22-limitaciones-conocidas)
+
+
+---
+
+
+## 1. Visión General
+
+
+TagFly es una biblioteca monolítica para añadir pines interactivos, mensajes estilizados y capas de contenido sobre imágenes. Está diseñada para integrarse como componente dentro de aplicaciones web mayores —como muros de debates, galerías colaborativas o plataformas de revisión visual— sin dependencias de framework.
+
+
+**Metadatos:**
+
+
+| Propiedad | Valor |
+|---|---|
+| Lenguaje | Vanilla JS (ES6+) |
+| Formato | Archivo único HTML |
+| Peso | ~32 KB sin CDN |
+| Input | Touch-first, mouse compatible |
+| Dependencias runtime | 0 (FontAwesome es la única crítica para UI) |
+
+
+---
+
+
+## 2. Arquitectura
+
+
+TagFly se estructura en tres capas concéntricas, cada una con responsabilidad única y acoplamiento mínimo:
+
+
+```mermaid
+graph TD
+    subgraph Capa de Presentación
+        A[Pines DOM] --> B[Overlay de contenido]
+        C[Modal de creación/edición] --> D[Lista lateral]
+    end
+
+
+    subgraph Capa de Lógica
+        E["tagsData (Store global)"]
+        F[CRUD Functions]
+        G[Drag & Drop V3]
+        H[Capas / Paginación]
+    end
+
+
+    subgraph Capa de Persistencia
+        I[localStorage]
+        J[Export / Import JSON]
+    end
+
+
+    A -- "eventos / renderizado" --> E
+    B -- "eventos / renderizado" --> E
+    C -- "lectura / escritura" --> F
+    F -- "lectura / escritura" --> E
+    G -- "posición" --> E
+    H -- "filtro" --> A
+    E -- "serialización" --> I
+    E -- "serialización" --> J
+```
+
+
+### Flujo de datos
+
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant P as Presentación (DOM)
+    participant L as Lógica (tagsData)
+    participant S as Persistencia
+
+
+    U->>P: Click / Drag / Touch
+    P->>L: Evento capturado
+    L->>L: Validar, calcular posición
+    L->>S: saveTags()
+    S-->>L: Confirmación
+    L->>P: renderTags()
+    P-->>U: DOM actualizado
+```
+
+
+> **Nota para integración:** Para conectar con backend, el paso `saveTags() → localStorage` se reemplaza o complementa con una llamada HTTP. `renderTags()` se ejecuta igual porque lee de `tagsData`, no del storage.
+
+
+---
+
+
+## 3. Modelo de Datos
+
+
+Toda la información reside en el objeto global `tagsData`, un diccionario clave-valor donde la clave es un ID único y el valor es un objeto `TagData`:
+
+
+```javascript
+const tagsData = {
+  "a1b2c3d4e5": { // ← generateUniqueId()
+    containerId: "img-1",          // ID del .image-container padre
+    position: {
+      left: 42.5,                  // Porcentaje respecto al contenedor (0–100)
+      top: 67.3                    // Porcentaje respecto al contenedor (0–100)
+    },
+    title: "Título del mensaje",
+    message: "Contenido del mensaje...",
+    image: "https://...",           // URL opcional de imagen adjunta
+    timestamp: 1718234567890,      // Date.now() al crear
+    icon: "fa-map-pin",            // Clase FontAwesome (sin prefijo fas/far)
+    category: "informacion",       // informacion | importante | detalle | advertencia | nota
+    layer: "1",                    // "1" | "2" | "3"
+    shape: "default",              // default | cloud | tag | thought | ribbon
+    style: "glass",                // default | transparent | blur | glass | sepia | dark
+    template: "card",              // default | minimal | card | modern | elegant
+    colorConfigMode: "auto",       // auto | theme | custom
+    theme: "ocean",                // default | dark | nature | sunset | ocean | royal
+    customColors: {                // Solo si colorConfigMode === "custom"
+      bgColor: "#f8f9fa",
+      headerBg: "#0d9488",
+      textColor: "#333333",
+      accentColor: "#f59e0b"
+    }
+  }
+};
+```
+
+
+### Referencia de campos
+
+
+| Campo | Tipo | Obligatorio | Descripción |
+|---|---|---|---|
+| `containerId` | `string` | **Sí** | ID del elemento `.image-container` que contiene el pin |
+| `position` | `{left, top}` | **Sí** | Coordenadas en porcentaje (0–100) relativas al contenedor |
+| `title` | `string` | **Sí** | Título del mensaje, máx 60 caracteres |
+| `message` | `string` | **Sí** | Cuerpo del mensaje, máx 500 caracteres |
+| `image` | `string` | No | URL de imagen adjunta dentro del mensaje |
+| `timestamp` | `number` | **Sí** | Timestamp Unix en milisegundos |
+| `icon` | `string` | Auto | Clase de icono FA, defecto `"fa-map-pin"` |
+| `category` | `string` | Auto | Uno de los 5 valores de categoría |
+| `layer` | `string` | Auto | `"1"`, `"2"` o `"3"` |
+| `shape` | `string` | No | Forma visual del card |
+| `style` | `string` | No | Estilo visual del card |
+| `template` | `string` | No | Plantilla preset |
+| `colorConfigMode` | `string` | No | `"auto"`, `"theme"` o `"custom"` |
+| `theme` | `string` | No | Tema predefinido, solo si mode=`"theme"` |
+| `customColors` | `object` | No | Colores custom, solo si mode=`"custom"` |
+
+
+---
+
+
+## 4. Dependencias
+
+
+| Recurso | Tipo | Criticidad | Rol |
+|---|---|---|---|
+| `font-awesome@6.5` | CSS + fuentes | **Alta** | Iconos de pines, botones, UI completa |
+| `node-vibrant@3.1` | JS | Media | Extracción de paleta desde imagen (modo color auto). Fallback a tema default si no carga. |
+| `Google Fonts` | CSS | Baja | Tipografía (Poppins, Montserrat, Dancing Script). Sin impacto funcional si falla. |
+
+
+> **Advertencia para apps sin conexión estable (ej: shttps):** Los recursos CDN pueden no cargar. TagFly degrada correctamente sin Vibrant (usa colores default) y sin fuentes (usa system fonts). FontAwesome es la única dependencia que afecta funcionalidad si falta: los iconos simplemente no se muestran, pero la app sigue operativa.
+
+
+---
+
+
+## 5. Inicio Rápido
+
+
+Para incrustar TagFly dentro de un muro de debates existente:
+
+
+```mermaid
+graph LR
+    A[1. Dependencias CDN] --> B[2. Contenedor .image-container]
+    B --> C[3. Markup del modal + overlay]
+    C --> D[4. Script de TagFly]
+    D --> E[5. Script de integración]
+```
+
+
+**Mínimo integrable:**
+
+
+```html
+<!-- 1. Dependencias CDN -->
+<link rel="stylesheet" href="font-awesome.css">
+<script src="vibrant.min.js"></script>
+
+
+<!-- 2. Contenedor de imagen del debate -->
+<div class="image-container" id="debate-img-42">
+    <img src="ruta/imagen.jpg" crossorigin="anonymous">
+    <button class="add-tag-btn" data-container="debate-img-42">
+        <i class="fas fa-plus"></i>
+    </button>
+</div>
+
+
+<!-- 3. Markup del modal, overlay, controles (copiar desde el archivo consolidado) -->
+
+
+<!-- 4. Script de TagFly -->
+<script>
+    // ... todo el JS de TagFly ...
+</script>
+
+
+<!-- 5. Tu script de integración -->
+<script>
+    postLoadTagsForDebate(42);
+</script>
+```
+
+
+---
+
+
+## 6. Estructura HTML Requerida
+
+
+### Contenedor de imagen
+
+
+```html
+<div
+  class="image-container"      <!-- Clase requerida -->
+  id="mi-id-unico"             <!-- ID requerido, se almacena en tag.containerId -->
+  style="position:relative"    <!-- Ya aplicado por CSS, necesario si se desvincula el CSS -->
+>
+    <img
+        src="..."
+        crossorigin="anonymous" <!-- CRÍTICO para Vibrant -->
+    >
+    <!-- Botón de agregar pin (opcional, se puede abrir vía JS) -->
+    <button class="add-tag-btn" data-container="mi-id-unico">
+        <i class="fas fa-plus"></i>
+    </button>
+</div>
+```
+
+
+> **CRÍTICO:** El atributo `crossorigin="anonymous"` en el `<img>` es obligatorio para que `Vibrant` pueda leer los píxeles. Sin él, el modo de color "Automático" fallará silenciosamente y usará colores por defecto.
+
+
+### Elementos del modal (IDs requeridos)
+
+
+| ID | Rol | Fallo sin él |
+|---|---|---|
+| `tag-modal` | Modal de creación/edición | No se puede crear ni editar tags |
+| `tag-preview-card` | Vista previa en el modal | Preview vacío, sin error fatal |
+| `delete-confirm-modal` | Confirmación de eliminación | `deleteTag()` no ejecuta |
+| `tag-content-overlay` | Overlay de visualización de tag | `showTagContent()` no muestra |
+| `message-card` | Card dentro del overlay | Overlay vacío |
+| `debug-console` | Consola de depuración | Sin logs visibles |
+| `messages-list` | Panel lateral de lista | Lista no se abre |
+| `image-comments` | Cuerpo de la lista | Lista vacía |
+
+
+---
+
+
+## 7. API Pública
+
+
+Todas las funciones son globales (adjuntas a `window`). Estas son las relevantes para integración externa:
+
+
+### Lectura
+
+
+| Función / Variable | Retorna | Uso en integración |
+|---|---|---|
+| `tagsData` (obj global) | `Object` | Acceso directo al store. Leer para sincronizar con backend. |
+| `generateUniqueId()` | `string` | Generar IDs antes de enviar al backend. |
+| `formatTime(timestamp)` | `string` | Formatear timestamps para la UI del debate. |
+
+
+### Escritura (crear/actualizar tags programáticamente)
+
+
+```javascript
+// Crear un tag desde el código (ej: al publicar un comentario en el debate)
+function crearTagDesdeDebate(debateImageId, comentario) {
+    const tagId = generateUniqueId();
+    tagsData[tagId] = {
+        containerId: debateImageId,
+        position: comentario.posicion,  // { left: 25.5, top: 60.2 }
+        title: comentario.titulo,
+        message: comentario.texto,
+        image: comentario.imagenAdjunta || "",
+        timestamp: comentario.creadoEn,
+        icon: "fa-comment",
+        category: "informacion",
+        layer: "1",
+        shape: "default",
+        style: "default",
+        template: "default",
+        colorConfigMode: "auto",
+        theme: "default",
+        customColors: { bgColor:"#f8f9fa", headerBg:"#0d9488", textColor:"#333", accentColor:"#f59e0b" }
+    };
+    saveTags();
+    renderTags();
+    return tagId;
+}
+```
+
+
+### Renderizado
+
+
+| Función | Parámetros | Descripción |
+|---|---|---|
+| `renderTags()` | Ninguno | Destruye y reconstruye todos los pines en el DOM. Llamar después de modificar `tagsData`. |
+| `updateImageComments()` | Ninguno | Actualiza la lista lateral de mensajes para la capa activa. |
+| `updateVisibleTags()` | Ninguno | Muestra/oculta pines según `currentPage`. |
+| `showTagContent(tagId)` | `tagId: string` | Abre el overlay con el contenido del tag. Usar para deep-linking. |
+| `hideTagContent()` | Ninguno | Cierra el overlay. |
+
+
+### Modal (control programático)
+
+
+| Función | Parámetros | Descripción |
+|---|---|---|
+| `openTagModal(tagElement?)` | Elemento DOM opcional | Abre modal. Sin parámetro = modo creación. Con elemento = modo edición. |
+| `closeTagModal()` | Ninguno | Cierra y resetea el modal. |
+
+
+Para abrir el modal en modo creación apuntando a una imagen específica:
+
+
+```javascript
+currentImageContainer = document.getElementById("debate-img-42");
+openTagModal();
+```
+
+
+### Capas
+
+
+| Variable | Tipo | Descripción |
+|---|---|---|
+| `currentPage` | `number` | Capa activa (1, 2 o 3). Leer/escribir directamente. |
+| `totalPages` | `number` (const) | Total de capas, valor fijo `3`. |
+
+
+```javascript
+// Cambiar a capa 2
+currentPage = 2;
+updateVisibleTags();
+updateImageComments();
+```
+
+
+---
+
+
+## 8. Sistema de Eventos (Hooks)
+
+
+TagFly no implementa un EventEmitter interno. Para reaccionar a acciones del usuario desde un proyecto externo, se utilizan tres patrones:
+
+
+### Patrón A: Monkey-patch de funciones
+
+
+Reemplazar funciones globales antes de que se bindeen los eventos internos (ejecutar antes de `DOMContentLoaded`):
+
+
+```javascript
+const _saveTagOriginal = saveTag;
+saveTag = function() {
+    const wasEdit = isEditMode && tagToEdit;
+    const editId = wasEdit ? tagToEdit.dataset.tagId : null;
+
+
+    _saveTagOriginal.apply(this, arguments);
+
+
+    if (wasEdit) {
+        emitirEventoDebate("tag:editado", editId);
+    } else {
+        const newId = Object.keys(tagsData).pop();
+        emitirEventoDebate("tag:creado", newId);
+    }
+};
+```
+
+
+> **Limitación:** Dado que `saveTag()` llama a `closeTagModal()` que resetea `isEditMode`, la verificación debe hacerse *antes* de la llamada original, no después.
+
+
+### Patrón B: Dispatch de CustomEvents en el DOM
+
+
+Más limpio y desacoplado. Inyectar dispatches en los puntos clave:
+
+
+```javascript
+const _renderTagsOriginal = renderTags;
+renderTags = function() {
+    _renderTagsOriginal.apply(this, arguments);
+    document.dispatchEvent(new CustomEvent("tagfly:rendered", {
+        detail: { tagsCount: Object.keys(tagsData).length }
+    }));
+};
+
+
+// Escuchar desde el muro de debates
+document.addEventListener("tagfly:rendered", function(e) {
+    console.log("Tags renderizados:", e.detail.tagsCount);
+});
+```
+
+
+### Puntos de hook recomendados
+
+
+| Función | Evento sugerido | Cuando disparar |
+|---|---|---|
+| `saveTag()` | `tagfly:tag-saved` | Después de crear o editar |
+| `deleteTag()` | `tagfly:tag-deleted` | Después de eliminar |
+| `showTagContent()` | `tagfly:tag-viewed` | Al abrir el overlay de un tag |
+| `renderTags()` | `tagfly:rendered` | Después de cualquier re-render |
+| `performDrag()` | `tagfly:tag-moved` | Al soltar un pin arrastrado (en `handleDragEnd`) |
+
+
+### Patrón C: Observar mutaciones del DOM
+
+
+```javascript
+const observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+            if (node.classList && node.classList.contains("tag-point")) {
+                onPinCreado(node.dataset.tagId);
+            }
+        });
+        m.removedNodes.forEach(function(node) {
+            if (node.classList && node.classList.contains("tag-point")) {
+                onPinEliminado(node.dataset.tagId);
+            }
+        });
+    });
+});
+observer.observe(document.getElementById("debate-img-42"), { childList: true });
+```
+
+
+---
+
+
+## 9. Sincronización con Backend
+
+
+### Estrategia: Override de `saveTags`/`loadTags`
+
+
+El patrón recomendado para un muro de debates con backend es reemplazar la persistencia local por llamadas HTTP, manteniendo `tagsData` como fuente de verdad en memoria:
+
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant T as TagFly
+    participant B as Backend API
+
+
+    U->>T: Crea/edita/elimina/mueve tag
+    T->>T: Modifica tagsData
+    T->>B: PUT /api/debates/:id/annotations
+    B-->>T: 200 OK
+    T->>T: renderTags()
+    T-->>U: DOM actualizado
+
+
+    Note over T,B: Al cargar la página
+    B->>T: GET /api/debates/:id/annotations
+    T->>T: tagsData = response
+    T->>T: renderTags()
+```
+
+
+**Implementación:**
+
+
+```javascript
+/**
+ * Sobrescribe saveTags para sincronizar con el servidor del debate.
+ */
+saveTags = async function() {
+    try {
+        await fetch(`/api/debates/${debateId}/tags`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(tagsData)
+        });
+    } catch (err) {
+        debugLog("Error sincronizando: " + err.message, "error");
+        // Fallback: guardar localmente como respaldo
+        localStorage.setItem("annotate_tags_fallback", JSON.stringify(tagsData));
+    }
+};
+
+
+/**
+ * Carga los tags del servidor al abrir el debate.
+ */
+async function postLoadTagsForDebate(id) {
+    try {
+        const res = await fetch(`/api/debates/${id}/tags`);
+        tagsData = await res.json();
+        renderTags();
+    } catch (err) {
+        loadTags(); // Fallback: intentar cargar del localStorage
+        renderTags();
+    }
+}
+```
+
+
+### Estrategia: Granular (un tag a la vez)
+
+
+Si el backend maneja tags como recursos individuales:
+
+
+```javascript
+const _saveTagOrig = saveTag;
+saveTag = async function() {
+    const wasEdit = isEditMode && tagToEdit;
+    const editId = wasEdit ? tagToEdit.dataset.tagId : null;
+
+
+    _saveTagOrig.apply(this, arguments);
+
+
+    if (wasEdit) {
+        await fetch(`/api/tags/${editId}`, {
+            method: "PATCH",
+            body: JSON.stringify(tagsData[editId])
+        });
+    } else {
+        const newId = Object.keys(tagsData).pop();
+        await fetch(`/api/tags`, {
+            method: "POST",
+            body: JSON.stringify(tagsData[newId])
+        });
+    }
+};
+```
+
+
+> **Recomendación:** Para un muro colaborativo (múltiples usuarios), la estrategia granular es preferible porque permite notificaciones en tiempo real por tag individual vía WebSocket, mientras que la estrategia bulk es más simple para modo single-user.
+
+
+### API REST esperada del backend
+
+
+| Método | Endpoint | Body | Response |
+|---|---|---|---|
+| `GET` | `/api/debates/:id/annotations` | — | `{ [tagId]: TagData, ... }` o `TagData[]` |
+| `PUT` | `/api/debates/:id/annotations` | `{ [tagId]: TagData, ... }` | `200 OK` |
+| `POST` | `/api/tags` (granular) | `TagData` | `{ id: string }` |
+| `PATCH` | `/api/tags/:id` (granular) | `Partial<TagData>` | `200 OK` |
+| `DELETE` | `/api/tags/:id` (granular) | — | `204 No Content` |
+
+
+> **Schema del backend:** Almacenar `position` como `JSON` (PostgreSQL) o `Map` (MongoDB). No normalizar las propiedades de estilo (`shape`, `style`, `template`, `customColors`) en tablas separadas — son metadatos del tag y no se consultan independientemente.
+
+
+---
+
+
+## 10. Sistema de Drag & Drop
+
+
+TagFly usa un sistema unificado (V3) que distingue tres gestos en un solo flujo:
+
+
+```mermaid
+flowchart TD
+    A["mousedown / touchstart"] --> B{Umbral > 8px?}
+    B -- No --> C{Long-press 500ms?}
+    B -- Sí --> D["performDrag() → saveTags()"]
+    C -- Sí --> E["togglePinSelection()"]
+    C -- No --> F["showTagContent()"]
+```
+
+
+### Parámetros configurables
+
+
+| Propiedad | Default | Descripción |
+|---|---|---|
+| `v3State.DRAG_THRESHOLD` | `8` (px) | Distancia mínima para iniciar arrastre |
+| `v3State.LONG_PRESS_TIME` | `500` (ms) | Duración para activar selección múltiple |
+
+
+### Restricciones de movimiento
+
+
+Los pines están restringidos al área del contenedor padre. `performDrag()` calcula los límites dinámicamente basándose en el tamaño del pin y del contenedor, garantizando que nunca se salga del área visible.
+
+
+> **Advertencia:** El drag usa coordenadas `clientX/clientY` absolutas. Si el contenedor está dentro de un scrollable, las posiciones se calculan correctamente respecto al `getBoundingClientRect()` del contenedor en cada frame. Sin embargo, el scroll *durante* un arrastre activo no se previene — puede generar saltos. Aceptable para la mayoría de layouts de muro donde la imagen está completamente visible.
+
+
+---
+
+
+## 11. Sistema de Capas
+
+
+TagFly gestiona 3 capas (fijas) que funcionan como filtros de visibilidad:
+
+
+- Cada tag tiene un campo `layer` (`"1"`, `"2"` o `"3"`)
+- `currentPage` determina qué capa es visible
+- Cambiar capa alterna `display: none` en los pines
+- La lista lateral también se filtra por capa
+
+
+```mermaid
+graph TD
+    subgraph "tagsData"
+        T1["tag A (layer: '1')"]
+        T2["tag B (layer: '1')"]
+        T3["tag C (layer: '2')"]
+        T4["tag D (layer: '3')"]
+    end
+
+
+    subgraph "currentPage = 1"
+        V1["tag A ✓ visible"]
+        V2["tag B ✓ visible"]
+        H1["tag C ✗ hidden"]
+        H2["tag D ✗ hidden"]
+    end
+
+
+    T1 --> V1
+    T2 --> V2
+    T3 --> H1
+    T4 --> H2
+```
+
+
+### Mapeo semántico para muro de debates
+
+
+| Capa TagFly | Semántica sugerida | Ejemplo |
+|---|---|---|
+| `"1"` | Argumentos principales | Posts iniciales, tesis |
+| `"2"` | Refutaciones / contraargumentos | Respuestas directas |
+| `"3"` | Fuentes / evidencias | Citas, datos, capturas |
+
+
+```javascript
+function capaDesdeTipoIntervencion(tipo) {
+    const mapa = { "argumento": "1", "refutacion": "2", "fuente": "3" };
+    return mapa[tipo] || "1";
+}
+```
+
+
+> `totalPages` es una constante (`3`). Para más capas, modificar la constante y añadir opciones en el `<select id="tag-layer">` del HTML.
+
+
+---
+
+
+## 12. Sistema de Colores
+
+
+Tres modos mutuamente excluyentes, definidos por `colorConfigMode`:
+
+
+```mermaid
+graph TD
+    A["colorConfigMode"] --> B["auto"]
+    A --> C["theme"]
+    A --> D["custom"]
+
+
+    B --> B1["Vibrant extrae paleta de la imagen"]
+    B1 --> B2["bgColor ← LightVibrant"]
+    B1 --> B3["headerBg ← Vibrant"]
+    B1 --> B4["accentColor ← Muted"]
+    B1 --> B5["textos ← getContrastColor()"]
+
+
+    C --> C1["Paleta fija de THEMES[name]"]
+    D --> D1["4 colores de customColors"]
+```
+
+
+### Variables CSS aplicadas por modo
+
+
+| Campo de `customColors` / `Theme` | CSS Variable | Afecta |
+|---|---|---|
+| `bgColor` | `--msg-bg-color` | Fondo del card |
+| `headerBg` | `--msg-header-bg` | Fondo de la cabecera |
+| `textColor` | `--msg-text-color` | Color del texto del cuerpo |
+| (calculado) | `--msg-header-color` | Color del texto de cabecera (contraste automático) |
+| `accentColor` | `--msg-accent-color` | Color de acento (botones, badges) |
+
+
+### Funciones de color aplicables a cualquier elemento
+
+
+```javascript
+// Aplicar colores a un card externo del debate
+applyColorScheme(miElemento, {
+    bgColor: "#1a1a2e",
+    headerBg: "#e94560",
+    textColor: "#ffffff",
+    accentColor: "#0f3460"
+});
+
+
+// Usar un tema predefinido
+applyThemeColors(miElemento, "ocean");
+
+
+// Contraste automático
+const txtColor = getContrastColor("#1a1a2e"); // → "#ffffff"
+```
+
+
+> **Modo auto:** Solo funciona si la imagen tiene `crossorigin="anonymous"` y el CDN de Vibrant cargó. En cualquier error, fallback a colores default.
+
+
+---
+
+
+## 13. Plantillas
+
+
+Las plantillas son presets que restringen y preconfiguran las opciones de personalización:
+
+
+```mermaid
+graph LR
+    subgraph "default"
+        S1["✓ Forma"] 
+        ST1["✓ Estilo"]
+        T1["✓ Tema"]
+    end
+    subgraph "minimal"
+        S2["✗ Forma"]
+        ST2["✗ Estilo"]
+        T2["✗ Tema"]
+        C2["Colores predefinidos"]
+    end
+    subgraph "card"
+        S3["✗ Forma"]
+        ST3["✓ Estilo"]
+        T3["✓ Tema"]
+    end
+    subgraph "modern"
+        S4["✓ Forma"]
+        ST4["✗ Estilo"]
+        T4["✗ Tema"]
+        C4["Colores predefinidos"]
+    end
+    subgraph "elegant"
+        S5["✗ Forma"]
+        ST5["✗ Estilo"]
+        T5["✗ Tema"]
+        C5["Colores predefinidos"]
+    end
+```
+
+
+| Plantilla | Forma custom | Estilo custom | Tema custom | Colores predefinidos | Defaults que asigna |
+|---|---|---|---|---|---|
+| `default` | Sí | Sí | Sí | No | shape=default, style=default, theme=default |
+| `minimal` | No | No | No | Sí (blanco/gris) | shape=default, style=transparent |
+| `card` | No | Sí | Sí | No | shape=default, style=glass |
+| `modern` | Sí | No | No | Sí (oscuro) | shape=thought, style=blur, theme=dark |
+| `elegant` | No | No | No | Sí (marrón/dorado) | shape=ribbon, style=sepia, theme=royal |
+
+
+Cuando una plantilla tiene `predefinedColors`, al aplicarse fuerza `colorConfigMode = "custom"` y copia esos colores a `customColors`.
+
+
+```javascript
+applyTemplate("modern");
+console.log(selectedShape);    // → "thought"
+console.log(selectedStyle);    // → "blur"
+console.log(colorConfigMode); // → "custom"
+```
+
+
+---
+
+
+## 14. Formas y Estilos Visuales
+
+
+### Formas
+
+
+Las formas modifican la apariencia del contenedor del mensaje (no del pin). Se implementan mediante clases CSS:
+
+
+| Valor | Clase CSS | Efecto visual |
+|---|---|---|
+| `default` | (ninguna) | Bordes redondeados estándar (12px) |
+| `cloud` | `.shape-cloud` | Border-radius asimétrico tipo nube |
+| `tag` | `.shape-tag` | Offset izquierdo con flecha |
+| `thought` | `.shape-thought` | Burbuja de pensamiento (20px radius) |
+| `ribbon` | `.shape-ribbon` | Banda horizontal con margen lateral |
+
+
+```javascript
+applyShapeToContainer(elemento, "cloud");
+applyShapeToContainer(elemento, "default"); // quitar
+```
+
+
+### Estilos
+
+
+Los estilos se aplican como clases CSS adicionales al `.message-card`. Son independientes de la forma y los colores:
+
+
+| Valor | Clase CSS | Efecto |
+|---|---|---|
+| `default` | (ninguna) | Sin efecto adicional |
+| `transparent` | `.style-transparent` | Fondo blanco 92% opacidad + blur(10px) |
+| `blur` | `.style-blur` | Fondo 82% + blur(15px) |
+| `glass` | `.style-glass` | Glassmorphism: 12% opacidad + blur(20px) + borde sutil |
+| `sepia` | `.style-sepia` | Filtro sepia(0.7) + fondo crema |
+| `dark` | `.style-dark` | Fondo negro 82% + texto blanco forzado |
+
+
+> **Advertencia:** El estilo `dark` incluye `!important` en `color: white` para sobreescribir las variables CSS de color de texto. Combinar `dark` con `colorConfigMode: "theme"` puede generar conflictos de especificidad.
+
+
+---
+
+
+## 15. Persistencia
+
+
+TagFly usa `localStorage` bajo la clave `"annotate_tags"`:
+
+
+| Función | Operación | Formato |
+|---|---|---|
+| `saveTags()` | Escritura | `JSON.stringify(tagsData, null, 0)` (compacto) |
+| `loadTags()` | Lectura | `JSON.parse(localStorage.getItem(...))` |
+
+
+> **Límite de tamaño:** `localStorage` tiene un límite de ~5MB por origen. Si el muro maneja cientos de tags con imágenes adjuntas (URLs largas), se puede alcanzar este límite. **Mitigación:** no almacenar las URLs de imagen adjunta en local, o migrar a `IndexedDB`.
+
+
+### Desactivar persistencia local
+
+
+```javascript
+saveTags = function() {};
+loadTags = function() { tagsData = {}; };
+```
+
+
+---
+
+
+## 16. Exportar / Importar
+
+
+| Función | Formato | Nombre archivo | Mime |
+|---|---|---|---|
+| `exportTags()` | JSON indentado (2 espacios) | `tags_data.json` | `application/json` |
+| `importTags(event)` | JSON (cualquier estructura) | — | — |
+
+
+`importTags` realiza un **merge**, no un reemplazo: `tagsData = { ...tagsData, ...imported }`. Si hay IDs duplicados, los importados sobreescriben los locales.
+
+
+> Para el muro de debates, `exportTags()` puede adaptarse para exportar solo los tags de una imagen específica filtrando por `containerId`.
+
+
+---
+
+
+## 17. Selección Múltiple
+
+
+Sistema para seleccionar y eliminar varios pines a la vez:
+
+
+```mermaid
+stateDiagram-v2
+    [*] --> Inactivo: Estado inicial
+    Inactivo --> Activo: toggleMultiSelectMode()
+    Activo --> Inactivo: toggleMultiSelectMode()
+    Activo --> PinSeleccionado: Long-press sobre pin
+    PinSeleccionado --> PinSeleccionado: Long-press sobre otro pin
+    PinSeleccionado --> Activo: deleteSelectedPins() + confirmación
+```
+
+
+| Variable | Tipo | Descripción |
+|---|---|---|
+| `isMultiSelectMode` | `boolean` | Modo activo/inactivo |
+| `v3State.selectedPins` | `Set<string>` | Set de tagIds seleccionados |
+
+
+```javascript
+// Leer pines seleccionados desde integración externa
+const idsSeleccionados = [...v3State.selectedPins];
+if (idsSeleccionados.length > 0) {
+    console.log("Pines seleccionados:", idsSeleccionados);
+}
+```
+
+
+---
+
+
+## 18. Variables CSS
+
+
+### Variables de la interfaz (pin, botones, layout) — Globales en `:root`
+
+
+| Variable | Default | Afecta |
+|---|---|---|
+| `--primary-color` | `rgba(13,148,136,0.92)` | Pin, botones primarios, acentos |
+| `--hover-color` | `rgba(15,118,110,0.92)` | Estado hover de pines y botones |
+| `--text-color` | `#1e293b` | Texto general de la UI |
+| `--bg-color` | `#f0f2f5` | Fondo del body |
+| `--border-radius` | `16px` | Bordes redondeados de contenedores |
+| `--font-primary` | `'Poppins'` | Tipografía base |
+
+
+### Variables de mensajes — Aplicadas inline por elemento
+
+
+| Variable | Default | Afecta |
+|---|---|---|
+| `--msg-bg-color` | `#f8f9fa` | Fondo del card de mensaje |
+| `--msg-header-bg` | `#0d9488` | Fondo de la cabecera del mensaje |
+| `--msg-text-color` | `#333333` | Texto del cuerpo |
+| `--msg-header-color` | `#ffffff` | Texto de la cabecera |
+| `--msg-accent-color` | `#f59e0b` | Acentos del mensaje |
+
+
+### Personalización para muro de debates
+
+
+```css
+/* En tu CSS, sobreescribir para que TagFly se integre visualmente */
+:root {
+    --primary-color: var(--debate-color-primary);
+    --hover-color: var(--debate-color-hover);
+    --font-primary: var(--debate-font);
+    --bg-color: var(--debate-bg);
+}
+```
+
+
+---
+
+
+## 19. Guía: Integración con Muro de Debates
+
+
+### Paso 1: Estructura HTML del debate
+
+
+```html
+<article class="debate-post" data-debate-id="{{ debate.id }}">
+    <h2>{{ debate.titulo }}</h2>
+
+
+    <!-- Imagen anotable -->
+    <div class="image-container" id="debate-{{ debate.id }}">
+        <img src="{{ debate.imagen }}" crossorigin="anonymous">
+        <button class="add-tag-btn" data-container="debate-{{ debate.id }}">
+            <i class="fas fa-plus"></i>
+        </button>
+    </div>
+
+
+    <!-- Controles de capas con etiquetas semánticas -->
+    <div class="debate-layers">
+        <button class="layer-btn active" data-layer="1">Argumentos</button>
+        <button class="layer-btn" data-layer="2">Refutaciones</button>
+        <button class="layer-btn" data-layer="3">Fuentes</button>
+    </div>
+
+
+    <!-- Modal, overlay, etc. (markup de TagFly) -->
+</article>
+```
+
+
+### Paso 2: Script puente (debate-tagfly-bridge.js)
+
+
+```javascript
+/**
+ * debate-tagfly-bridge.js
+ * Puente entre el muro de debates y TagFly.
+ * Cargar DESPUÉS del script consolidado de TagFly.
+ */
+(function() {
+    "use strict";
+
+
+    const DEBATE_ID = document.querySelector("[data-debate-id]")?.dataset.debateId;
+    if (!DEBATE_ID) return;
+
+
+    const CONTAINER_ID = `debate-${DEBATE_ID}`;
+    const API_BASE = `/api/debates/${DEBATE_ID}/annotations`;
+
+
+    // --- Override de persistencia ---
+    saveTags = async function() {
+        try {
+            // Enviar solo los tags de ESTE debate
+            const debateTags = {};
+            Object.entries(tagsData).forEach(([id, tag]) => {
+                if (tag.containerId === CONTAINER_ID) debateTags[id] = tag;
+            });
+            await fetch(API_BASE, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${getToken()}`
+                },
+                body: JSON.stringify(debateTags)
+            });
+        } catch (e) {
+            debugLog("Sync fallida: " + e.message, "error");
+        }
+    };
+
+
+    // --- Carga inicial ---
+    async function loadDebateAnnotations() {
+        try {
+            const res = await fetch(API_BASE, {
+                headers: { "Authorization": `Bearer ${getToken()}` }
+            });
+            const data = await res.json();
+            // data puede ser array u objeto por ID
+            if (Array.isArray(data)) {
+                data.forEach(ann => { tagsData[ann.id] = ann; });
+            } else {
+                Object.assign(tagsData, data);
+            }
+            renderTags();
+            debugLog(`Cargadas ${Object.keys(data).length} anotaciones`, "info");
+        } catch (e) {
+            debugLog("Error cargando: " + e.message, "error");
+            loadTags(); // Fallback local
+            renderTags();
+        }
+    }
+
+
+    // --- Hook: emitir evento al renderizar ---
+    const _renderOrig = renderTags;
+    renderTags = function() {
+        _renderOrig.apply(this, arguments);
+        document.dispatchEvent(new CustomEvent("debate:annotations-changed", {
+            detail: { debateId: DEBATE_ID, count: Object.keys(tagsData).length }
+        }));
+    };
+
+
+    // --- Botones de capa semánticos ---
+    document.querySelectorAll(".layer-btn").forEach(btn => {
+        btn.addEventListener("click", function() {
+            document.querySelectorAll(".layer-btn").forEach(b => b.classList.remove("active"));
+            this.classList.add("active");
+            currentPage = parseInt(this.dataset.layer);
+            updateVisibleTags();
+            updateImageComments();
+        });
+    });
+
+
+    // --- Iniciar ---
+    currentImageContainer = document.getElementById(CONTAINER_ID);
+    loadDebateAnnotations();
+})();
+```
+
+
+### Paso 3: Deep-linking a una anotación
+
+
+```javascript
+// URL: /debates/42#annotation-abc123
+function handleAnnotationDeepLink() {
+    const hash = window.location.hash;
+    const match = hash.match(/#annotation-(.+)/);
+    if (!match) return;
+
+
+    const tagId = match[1];
+    const tag = tagsData[tagId];
+    if (!tag) return;
+
+
+    // Cambiar a la capa correcta
+    currentPage = parseInt(tag.layer);
+    updateVisibleTags();
+
+
+    // Abrir el overlay tras un breve delay para que el DOM esté listo
+    setTimeout(() => showTagContent(tagId), 300);
+}
+document.addEventListener("DOMContentLoaded", handleAnnotationDeepLink);
+```
+
+
+### Diagrama de integración completo
+
+
+```mermaid
+graph TB
+    subgraph "Frontend - Muro de Debates"
+        DH[Título del debate]
+        IMG[".image-container#debate-42"]
+        LAYERS[Botones: Argumentos / Refutaciones / Fuentes]
+        BRIDGE["debate-tagfly-bridge.js"]
+    end
+
+
+    subgraph "Frontend - TagFly"
+        MODAL[Modal de creación]
+        OVERLAY[Overlay de visualización]
+        STORE["tagsData (global)"]
+        DRAG[Sistema Drag & Drop]
+        RENDER["renderTags()"]
+    end
+
+
+    subgraph "Backend"
+        API["REST API /api/debates/:id/annotations"]
+        DB[(Base de datos)]
+    end
+
+
+    IMG --> |"click → openTagModal()"| MODAL
+    MODAL --> |"saveTag()"| STORE
+    STORE --> |"renderTags()"| RENDER
+    RENDER --> |"Crea pines DOM"| IMG
+    IMG --> |"drag"| DRAG
+    DRAG --> |"performDrag()"| STORE
+
+
+    STORE --> |"saveTags() [override]"| BRIDGE
+    BRIDGE --> |"PUT /api/..."| API
+    API --> |"SELECT / INSERT / UPDATE"| DB
+
+
+    API --> |"GET → tags"| BRIDGE
+    BRIDGE --> |"tagsData = response"| STORE
+    STORE --> |"renderTags()"| RENDER
+
+
+    LAYERS --> |"currentPage = N"| STORE
+    STORE --> |"updateVisibleTags()"| IMG
+```
+
+
+---
+
+
+## 20. Referencia de Constantes
+
+
+### TEMPLATES
+
+
+```javascript
+const TEMPLATES = {
+    default:  { name:"Estándar",    allowCustomShape:true,  allowCustomStyle:true,  allowCustomTheme:true  },
+    minimal:  { name:"Minimalista", allowCustomShape:false, allowCustomStyle:false, allowCustomTheme:false },
+    card:     { name:"Tarjeta",     allowCustomShape:false, allowCustomStyle:true,  allowCustomTheme:true  },
+    modern:   { name:"Moderno",     allowCustomShape:true,  allowCustomStyle:false, allowCustomTheme:false },
+    elegant:  { name:"Elegante",    allowCustomShape:false, allowCustomStyle:false, allowCustomTheme:false }
+};
+```
+
+
+### THEMES
+
+
+```javascript
+const THEMES = {
+    default: { bgColor:"#f8f9fa", headerBg:"#0d9488", textColor:"#333",    accentColor:"#f59e0b" },
+    dark:    { bgColor:"#2c3e50", headerBg:"#34495e", textColor:"#ecf0f1", accentColor:"#3498db" },
+    nature:  { bgColor:"#e8f5e8", headerBg:"#2e7d32", textColor:"#1b5e20", accentColor:"#4caf50" },
+    sunset:  { bgColor:"#fff3e0", headerBg:"#ff6f00", textColor:"#e65100", accentColor:"#ff9800" },
+    ocean:   { bgColor:"#e3f2fd", headerBg:"#0277bd", textColor:"#01579b", accentColor:"#03a9f4" },
+    royal:   { bgColor:"#f3e5f5", headerBg:"#7b1fa2", textColor:"#4a148c", accentColor:"#9c27b0" }
+};
+```
+
+
+### Valores enumerados
+
+
+| Propiedad | Valores válidos |
+|---|---|
+| `category` | `"informacion"`, `"importante"`, `"detalle"`, `"advertencia"`, `"nota"` |
+| `shape` | `"default"`, `"cloud"`, `"tag"`, `"thought"`, `"ribbon"` |
+| `style` | `"default"`, `"transparent"`, `"blur"`, `"glass"`, `"sepia"`, `"dark"` |
+| `template` | `"default"`, `"minimal"`, `"card"`, `"modern"`, `"elegant"` |
+| `theme` | `"default"`, `"dark"`, `"nature"`, `"sunset"`, `"ocean"`, `"royal"` |
+| `colorConfigMode` | `"auto"`, `"theme"`, `"custom"` |
+| `layer` | `"1"`, `"2"`, `"3"` |
+
+
+---
+
+
+## 21. Referencia de Funciones
+
+
+### Utilidad
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `generateUniqueId()` | — | `string` | Ninguno |
+| `formatTime(ts)` | `ts: number` | `string` | Ninguno |
+| `getBrightness(hex)` | `hex: string` | `number` (0–255) | Ninguno |
+| `getContrastColor(hex)` | `hex: string` | `string` | Ninguno |
+| `debugLog(msg, type)` | `string, string` | `void` | Escribe en consola de debug |
+
+
+### Colores
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `applyColorScheme(el, colors)` | `Element, object` | `void` | Modifica CSS inline + clases tema en `el` |
+| `applyDefaultColorScheme(el)` | `Element` | `void` | Idem |
+| `applyThemeColors(el, name)` | `Element, string` | `void` | Idem |
+| `applyCustomColorsToEl(el)` | `Element` | `void` | Idem, usa `customColors` global |
+| `extractColorPalette(imgCont, msgCont)` | `Element, Element` | `Promise<void>` | Modifica CSS inline de `msgCont` |
+
+
+### Forma y Plantillas
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `applyShapeToContainer(el, shape)` | `Element, string` | `void` | Modifica clases CSS en `el` |
+| `applyTemplate(name)` | `string` | `void` | Modifica múltiples globals |
+
+
+### Persistencia
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `saveTags()` | — | `void` | localStorage write |
+| `loadTags()` | — | `void` | Lee `tagsData` desde localStorage |
+
+
+### CRUD y Renderizado
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `createTagElement(id, data)` | `string, TagData` | `void` | Crea DOM node |
+| `renderTags()` | — | `void` | Destruye + recrea todos los pines |
+| `updateImageComments()` | — | `void` | Reconstruye lista lateral |
+| `updateVisibleTags()` | — | `void` | Toggle `.hidden-layer` en pines |
+
+
+### Modal
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `openTagModal(el?)` | `Element?` | `void` | Abre modal (crea/edita) |
+| `closeTagModal()` | — | `void` | Cierra modal + reset |
+| `saveTag()` | — | `void` | Crea/edita + save + render + close |
+| `deleteTag()` | — | `void` | Elimina + save + render |
+
+
+### Overlay de contenido
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `showTagContent(tagId)` | `string` | `void` | Abre overlay con datos del tag |
+| `hideTagContent()` | — | `void` | Cierra overlay |
+
+
+### Export / Import
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `exportTags()` | — | `void` | Descarga JSON |
+| `importTags(event)` | `Event` | `void` | Merge en tagsData + save + render |
+
+
+### Selección múltiple
+
+
+| Función | Parámetros | Retorna | Side effects |
+|---|---|---|---|
+| `toggleMultiSelectMode()` | — | `void` | Toggle modo + limpia selección |
+| `deleteSelectedPins()` | — | `void` | Elimina seleccionados + confirm |
+
+
+---
+
+
+## 22. Limitaciones Conocidas
+
+
+| Área | Limitación | Impacto | Mitigación |
+|---|---|---|---|
+| Escalar | Un solo `tagsData` global para todos los contenedores | En página con muchos debates, todos los tags comparten store | Filtrar por `containerId` en sync con backend |
+| Capas | `totalPages` es constante (`3`) | No se pueden añadir capas dinámicamente sin modificar código | Cambiar la constante y añadir options al select |
+| Colisión IDs | `generateUniqueId()` usa `Math.random()` | Posible colisión con tags importados o del backend | El backend debería asignar IDs; usar UUID si se genera en cliente |
+| Accesibilidad | Pines no tienen role ni aria-label | Lectores de pantalla no anuncian los pines | Añadir `role="button"` y `aria-label` en `createTagElement` |
+| Performance | `renderTags()` destruye y recrea TODO el DOM de pines | Con +100 pines puede haber flicker | Para alto volumen, implementar diffing o virtualización |
+| Vibrant | Requiere `crossorigin` en la imagen | Sin CORS, modo auto no funciona | Usar proxy de imagen o forzar modo theme/custom |
+| i18n | Strings hardcodeados en español | No es localizable sin modificar código | Extraer strings a un objeto `i18n` |
+| Z-index | Modal=1000, overlay=1001, debug=2000 | Puede conflictar con modales del debate | Ajustar valores base o usar CSS variables para z-index |
+| Drag + scroll | No se previene scroll durante arrastre | En táctiles, scroll puede competir con drag | Añadir `e.preventDefault()` en touchstart cuando se detecta tag-point |
+| Múltiples debates | `currentImageContainer` es un solo global | Solo una imagen "activa" a la vez | Gestionar el estado en el bridge, no en TagFly directamente |
+
+
+---
+
+
+*TagFly v3.0 — Documentación técnica para integración con muro de debates.*
+```
