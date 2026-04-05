@@ -1,162 +1,209 @@
-// src/types/index.ts
-// Contratos tipados alineados con backend PostgreSQL + API /v1
+export type Tier = "S" | "A" | "B" | "C";
 
-export type UserRole = 'USER' | 'AUDITOR' | 'ADMIN' | 'POLICY_OPERATOR';
-export type DebateStatus = 'DRAFT' | 'OPEN' | 'CLOSED' | 'CALC_POINTS' | 'FINALIZED';
-export type DebateScope = 'LOCAL' | 'GLOBAL';
-export type TierLevel = 'S' | 'A' | 'B' | 'C';
-export type SvpEventStatus = 'PENDING' | 'SENT' | 'FAILED' | 'ACKNOWLEDGED' | 'CRITICAL_FAILURE';
-export type ObjectStatus = 'ACTIVE' | 'TRANSFORMED' | 'BURNED' | 'TRANSFERRED';
-export type InventoryAction = 'GRANT' | 'REVALUE' | 'TRANSFORM' | 'BURN' | 'TRANSFER';
+export type DebateStatus = "VERIFICADO" | "AUDITORIA" | "FINALIZADO" | "BORRADOR";
 
-export interface User {
-  id: string;
-  email: string;
-  username: string;
-  role: UserRole;
-  svpPoints: number;
-  level: number;
-  status: string;
-  createdAt: string;
-}
+export type DebateCycleStage =
+  | "VERIFICACION_INICIAL"
+  | "VALIDACION_INICIAL"
+  | "DEBATE_FORMAL"
+  | "VERIFICACION_RESULTADO_DEBATE"
+  | "VALIDACION_RESULTADO_DEBATE"
+  | "VOTACION_RANKING"
+  | "VERIFICACION_VOTOS"
+  | "VALIDACION_VOTOS"
+  | "REGISTRO_RESULTADOS"
+  | "ENTREGA_LOGROS";
 
-export interface Debate {
+export interface DebateSummary {
   id: string;
   title: string;
   description: string;
-  category: string;
-  scope: DebateScope;
+  participants: number;
   status: DebateStatus;
-  startDate: string;
-  endDate: string;
-  totalVotes?: number;
-  participantCount?: number;
-  configRules: Record<string, unknown>;
+  trend?: string;
+}
+
+export interface ExploreData {
+  stats: Array<{ label: string; value: string; tone: "blue" | "green" | "amber" | "slate"; note?: string }>;
+  debates: DebateSummary[];
+}
+
+export interface RankingAsset {
+  id: string;
+  debateId: string;
+  name: string;
+  tier: Tier;
+  category: string;
+  consensus: number;
+  validation: "VERIFICADO" | "AUDITANDO" | "PENDIENTE";
+  debateStage: DebateCycleStage;
+}
+
+export interface RankingsData {
+  hero: {
+    name: string;
+    tier: Tier;
+    consensus: number;
+    participants: string;
+  };
+  list: RankingAsset[];
+}
+
+export interface FeedbackEntry {
+  id: string;
+  author: string;
+  role: string;
+  tier: Tier;
+  title: string;
+  quote: string;
+  likes: number;
+  replies: number;
+  status: "AUDITADO" | "EN PROCESO" | "ARCHIVADO";
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  rarity: "S-TIER RARE" | "LEGENDARY" | "UNIQUE";
+  value: string;
+  description: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  title: string;
+  timestamp: string;
+  uuid: string;
+  hash: string;
+  tone: "blue" | "amber" | "green" | "slate";
+}
+
+export interface NotificationItem {
+  id: string;
+  label: string;
+  date: string;
+  status: string;
+  tx: string;
+  category: "system" | "debates" | "transfer";
+}
+
+export type DebateWallTool = "pin" | "sticker" | "bubble";
+
+export type DebateWallLayer = "1" | "2" | "3";
+
+export type DebateWallCategory = "informacion" | "importante" | "detalle" | "advertencia" | "nota";
+
+export type DebateWallColorMode = "auto" | "theme" | "custom";
+
+export type DebateWallShape = "normal" | "nube" | "burbuja" | "etiqueta" | "cinta";
+
+export type DebateWallStyle = "glass" | "blur" | "sepia" | "dark" | "transparente";
+
+export type DebateWallTemplate = "estandar" | "minimal" | "tarjeta" | "moderno" | "elegante";
+
+export interface DebateWallPalette {
+  background: string;
+  border: string;
+  title: string;
+  body: string;
+}
+
+export interface DebateWallPosition {
+  left: number;
+  top: number;
+}
+
+export interface DebateWallNode {
+  id: string;
+  containerId: string;
+  type: DebateWallTool;
+  icon: string;
+  title: string;
+  message: string;
+  label: string;
+  position: DebateWallPosition;
+  tone: "blue" | "amber" | "green" | "slate";
+  layer: DebateWallLayer;
+  category: DebateWallCategory;
   createdBy: string;
-  createdAt: string;
-  items?: DebateItem[];
+  timestamp: string;
+  colorMode: DebateWallColorMode;
+  shape: DebateWallShape;
+  style: DebateWallStyle;
+  template: DebateWallTemplate;
+  palette: DebateWallPalette;
+  votes: number;
+  locked?: boolean;
 }
 
-export interface DebateItem {
+export type DebateWallStore = Record<string, DebateWallNode>;
+
+export interface DebateWallComment {
   id: string;
-  debateId: string;
+  author: string;
+  role: string;
+  content: string;
+  createdAt: string;
+  layer: DebateWallLayer;
+  nodeId?: string;
+}
+
+export interface DebateWallVoter {
+  id: string;
   name: string;
-  description?: string;
-  imageUrl?: string;
-  tier?: TierLevel;
-  voteCount: number;
-  consensusPercentage: number;
-  isAudited: boolean;
-  metadata: Record<string, unknown>;
-  rank?: number;
+  handle: string;
+  active: boolean;
+  avatar?: string;
 }
 
-export interface Vote {
-  id: string;
-  userId: string;
-  itemId: string;
+export interface DebateWallData {
+  nodes: DebateWallNode[];
+  comments: DebateWallComment[];
+  voters: DebateWallVoter[];
+  activeUsers: number;
+}
+
+export interface DebateAnnotationsPayload {
   debateId: string;
-  scope: DebateScope;
-  durationSeconds: number;
-  comment?: string;
-  createdAt: string;
-}
-
-export interface InventoryObject {
-  id: string;
-  ownerId: string;
-  templateId: string;
-  name: string;
-  description?: string;
-  imageUrl?: string;
-  currentValue: number;
-  isDynamic: boolean;
-  status: ObjectStatus;
-  metadata: Record<string, unknown>;
-  createdAt: string;
+  tagsData: DebateWallStore;
   updatedAt: string;
 }
 
-export interface LedgerEntry {
+export interface DebateLifecycle {
+  debateId: string;
+  assetName: string;
+  stage: DebateCycleStage;
+  status: "PENDIENTE" | "EN CURSO" | "VERIFICADO";
+  auditStatus: "EN MONITOREO" | "OBSERVADO" | "INTEGRO";
+  participants: string;
+  summary: string;
+  timeline: Array<{
+    key: DebateCycleStage;
+    label: string;
+    state: "done" | "current" | "pending";
+  }>;
+  voting?: Array<{ label: string; value: number; color: string }>;
+}
+
+export type DebateWallEventType = "node_created" | "node_moved" | "node_deleted" | "nodes_imported";
+
+export interface DebateWallEvent {
   id: string;
-  objectId: string;
-  transactionId: string;
-  action: InventoryAction;
-  pointsDelta: number;
-  previousStateHash: string;
-  currentStateSnapshot: Record<string, unknown>;
-  auditSignature: string;
-  createdAt: string;
-}
-
-export interface SvpTransaction {
-  id: string;
-  eventId: string;
-  payload: Record<string, unknown>;
-  status: SvpEventStatus;
-  retryCount: number;
-  lastError?: string;
-  signature: string;
-  sentAt?: string;
-  acknowledgedAt?: string;
-  createdAt: string;
-}
-
-export interface DispatcherMetrics {
-  pending: number;
-  sent: number;
-  failed: number;
-  acknowledged: number;
-  critical: number;
-}
-
-export interface AuditLog {
-  id: string;
-  entityName: string;
-  entityId: string;
-  action: string;
-  userId: string;
-  oldValue?: Record<string, unknown>;
-  newValue?: Record<string, unknown>;
-  signature: string;
-  createdAt: string;
-}
-
-export interface Policy {
-  id: string;
-  policyId: string;
-  version: string;
-  description: string;
-  targetType: string;
-  rules: PolicyRule[];
-  isActive: boolean;
-  createdAt: string;
-}
-
-export interface PolicyRule {
-  id: string;
-  condition: string;
-  action: { type: string; params: Record<string, unknown> };
-}
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-  timestamp: string;
-  requestId?: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-export interface HttpError {
-  code: string;
+  type: DebateWallEventType;
   message: string;
-  status: number;
+  timestamp: string;
+}
+
+export interface SessionUser {
+  id: string;
+  handle: string;
+  name: string;
+  role: string;
+  permissions: string[];
+}
+
+export interface TenantInfo {
+  id: string;
+  name: string;
+  locale: "es" | "en";
 }

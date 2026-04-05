@@ -1,203 +1,217 @@
-// src/pages/RankingsPage.tsx
-// Fiel a: tierlist_rankings_simetría_total + tierlist_rankings_globales_móvil
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { AppLayout } from "../components/layout/AppLayout";
+import { SidebarQuickAccess, StatusBadge, TierBadge } from "../components/ui";
+import { fetchDebateLifecycle, fetchRankingsData } from "../services/api";
 
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { debatesApi } from '../services/api';
-import { TierBadge, AuditChip, ConsensusBar, LiveIndicator, StateWrapper } from '../components/ui';
-import type { TierLevel } from '../types';
+const stageLabelMap = {
+  VERIFICACION_INICIAL: "Verificacion inicial",
+  VALIDACION_INICIAL: "Validacion inicial",
+  DEBATE_FORMAL: "Debate formal",
+  VERIFICACION_RESULTADO_DEBATE: "Verificacion de resultados",
+  VALIDACION_RESULTADO_DEBATE: "Validacion de resultados",
+  VOTACION_RANKING: "Votacion en ranking",
+  VERIFICACION_VOTOS: "Verificacion de votos",
+  VALIDACION_VOTOS: "Validacion de votos",
+  ENTREGA_LOGROS: "Entrega de premios",
+  REGISTRO_RESULTADOS: "Registro final en base de datos",
+} as const;
 
-// Datos fiel al screenshot (Ethereum, Chainlink, Solana, etc.)
-const FALLBACK_ITEMS = [
-  { id: 'i1', debateId: 'd1', name: 'Ethereum Core', description: 'La base del valor programable. Líder indiscutible en descentralización y seguridad.', tier: 'S' as TierLevel, voteCount: 2400000, consensusPercentage: 98, isAudited: true, rank: 1, icon: 'hub', category: 'L1 Protocol', metadata: {}, svpImpact: 98 },
-  { id: 'i2', debateId: 'd1', name: 'Chainlink Oracle', description: 'Puente de datos crítico para la conectividad cross-chain y contratos inteligentes.', tier: 'S' as TierLevel, voteCount: 1900000, consensusPercentage: 94.8, isAudited: true, rank: 2, icon: 'database', category: 'Infrastructure', metadata: {}, svpImpact: 94.8 },
-  { id: 'i3', debateId: 'd2', name: 'Solana Network', description: 'L1 Monolítica de alto rendimiento para aplicaciones de alta frecuencia.', tier: 'A' as TierLevel, voteCount: 1400000, consensusPercentage: 88.2, isAudited: true, rank: 3, icon: 'rocket_launch', category: 'L1 Protocol', metadata: {}, svpImpact: 88.2 },
-  { id: 'i4', debateId: 'd2', name: 'Circle (USDC)', description: 'Dólar digital regulado. Infraestructura crítica para liquidez institucional.', tier: 'A' as TierLevel, voteCount: 1100000, consensusPercentage: 85.4, isAudited: false, rank: 4, icon: 'toll', category: 'Stablecoin', metadata: {}, svpImpact: 85.4 },
-  { id: 'i5', debateId: 'd3', name: 'Uniswap Protocol', description: 'Pionero en AMM automatizados. Referencia en mercados descentralizados.', tier: 'B' as TierLevel, voteCount: 780000, consensusPercentage: 72.1, isAudited: true, rank: 5, icon: 'token', category: 'DeFi', metadata: {}, svpImpact: 72.1 },
-  { id: 'i6', debateId: 'd3', name: 'Metamask Wallet', description: 'Portal líder para el ecosistema Web3 y gestión de identidad digital.', tier: 'C' as TierLevel, voteCount: 390000, consensusPercentage: 58.9, isAudited: false, rank: 6, icon: 'account_balance_wallet', category: 'Wallet', metadata: {}, svpImpact: 58.9 },
-];
-
-const TIER_HEADER_CFG = {
-  S: { gradient: 'from-primary/20 to-transparent', badge: 'bg-primary text-white', label: 'Tier-S · Consenso Dominante' },
-  A: { gradient: 'from-secondary/15 to-transparent', badge: 'bg-secondary text-surface', label: 'Tier-A · Alto Impacto' },
-  B: { gradient: 'from-tertiary/10 to-transparent', badge: 'bg-tertiary text-surface', label: 'Tier-B · Relevante' },
-  C: { gradient: 'from-on-surface/5 to-transparent', badge: 'bg-on-surface/20 text-on-surface/60', label: 'Tier-C · Observación' },
-};
-
-const STATUS_LABEL: Record<string, { label: string; icon: string; color: string }> = {
-  audited:   { label: 'VERIFICADO',  icon: 'verified',        color: 'text-secondary' },
-  verifying: { label: 'AUDITANDO',   icon: 'sync',            color: 'text-tertiary' },
-  pending:   { label: 'PENDIENTE',   icon: 'schedule',        color: 'text-on-surface/40' },
-};
-
-export default function RankingsPage() {
-  const [activeTier, setActiveTier] = useState<TierLevel | 'ALL'>('ALL');
-
-  const tiers: Array<TierLevel | 'ALL'> = ['ALL', 'S', 'A', 'B', 'C'];
-
-  const filtered = activeTier === 'ALL'
-    ? FALLBACK_ITEMS
-    : FALLBACK_ITEMS.filter((i) => i.tier === activeTier);
-
-  // Featured S-tier item (top del screenshot)
-  const featured = FALLBACK_ITEMS.find((i) => i.tier === 'S') ?? FALLBACK_ITEMS[0];
+export function RankingsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { data } = useQuery({ queryKey: ["rankings"], queryFn: fetchRankingsData, retry: 2 });
+  const { data: rankingVoting } = useQuery({
+    queryKey: ["ranking-voting-metrics"],
+    queryFn: () => fetchDebateLifecycle("sl-982-ax"),
+    retry: 1,
+  });
+  const activeTier = searchParams.get("tier") ?? "tier-s";
+  const filteredAssets = (data?.list ?? []).filter((asset) => {
+    if (activeTier === "tier-s") return asset.tier === "S" || asset.tier === "A";
+    if (activeTier === "tier-a") return asset.tier === "A";
+    if (activeTier === "tier-b") return asset.tier === "B";
+    if (activeTier === "tier-c") return asset.tier === "C";
+    return true;
+  });
 
   return (
-    <div className="min-h-full bg-surface">
-
-      {/* ── Header strip ── */}
-      <div className="bg-surface-container border-b border-outline-variant/10 px-6 py-4 lg:px-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <LiveIndicator label="Auditado en Vivo" />
-              <span className="text-xs text-on-surface/30 font-headline hidden sm:block">
-                Última sincronización: hace 12 segundos
-              </span>
-            </div>
-            <h1 className="font-headline font-bold text-xl text-on-surface" style={{ letterSpacing: '-0.02em' }}>
-              TierList | Rankings Globales
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 text-xs text-on-surface/50 hover:text-on-surface font-headline font-bold px-3 py-1.5 rounded-lg bg-surface-container-high transition-colors">
-              <span className="material-symbols-outlined text-sm">filter_list</span>
-              Filtros
-            </button>
-            <button className="flex items-center gap-1.5 text-xs text-on-surface/50 hover:text-on-surface font-headline font-bold px-3 py-1.5 rounded-lg bg-surface-container-high transition-colors">
-              <span className="material-symbols-outlined text-sm">sort</span>
-              Impacto
-            </button>
+    <AppLayout
+      contextPanel={
+        <div className="space-y-5 rounded-2xl border border-white/8 bg-[#10192c] p-4">
+          <h3 className="text-lg font-bold tracking-[-0.02em]">Controles Ranking</h3>
+          <div className="space-y-2">
+            <button type="button" className="w-full rounded-lg bg-white/6 px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/10">Aplicar filtros</button>
+            <button type="button" className="w-full rounded-lg bg-white/6 px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/10">Ordenar por impacto</button>
+              <Link to="/feedback" className="block rounded-lg bg-[#0052ff] px-3 py-2 text-center text-sm font-semibold">Nuevo debate</Link>
           </div>
         </div>
-      </div>
-
-      <div className="px-6 py-6 lg:px-8 max-w-7xl mx-auto">
-
-        {/* ── Featured Tier-S — fiel al screenshot ── */}
-        <div className={`rounded-xl p-5 bg-gradient-to-br ${TIER_HEADER_CFG.S.gradient} border border-primary/20 mb-6`}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="material-symbols-outlined text-primary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>military_tech</span>
-                <span className="font-headline font-bold text-primary text-xl" style={{ letterSpacing: '-0.02em' }}>Tier-S</span>
-                <span className="text-xs text-primary/60 font-headline">trending_up +4.2% Impacto</span>
-              </div>
-              <h2 className="font-headline font-bold text-on-surface text-lg mb-1" style={{ letterSpacing: '-0.02em' }}>
-                {featured.name}
-              </h2>
-              <p className="text-on-surface/60 text-sm leading-relaxed mb-3">{featured.description}</p>
-              <div className="flex items-center gap-4 text-sm">
-                <span className="text-on-surface/40 font-headline">
-                  Votos Activos <span className="text-on-surface font-bold">{(featured.voteCount / 1000000).toFixed(1)}M</span>
-                </span>
-                <AuditChip status="audited" label="Verificado" />
-              </div>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="font-headline font-bold text-primary text-4xl" style={{ letterSpacing: '-0.04em' }}>
-                {featured.consensusPercentage}%
-              </p>
-              <p className="text-xs text-on-surface/40 font-headline">Consenso Final</p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Tier filter tabs ── */}
-        <div className="flex gap-1.5 mb-5 flex-wrap">
-          {tiers.map((t) => (
-            <button key={t} onClick={() => setActiveTier(t)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-headline transition-all ${
-                activeTier === t
-                  ? 'bg-primary text-white'
-                  : 'bg-surface-container text-on-surface/50 hover:text-on-surface hover:bg-surface-container-high'
-              }`}>
-              {t !== 'ALL' && (
-                <span className="material-symbols-outlined text-xs">
-                  {t === 'S' ? 'military_tech' : t === 'A' ? 'grade' : t === 'B' ? 'star' : 'star_half'}
-                </span>
-              )}
-              {t === 'ALL' ? 'Todos' : `Tier-${t}`}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Rankings table — fiel a la estructura del screenshot ── */}
-        <div className="space-y-2">
-          {filtered.map((item, idx) => {
-            const auditStatus = item.isAudited
-              ? idx % 3 === 1 ? 'verifying' : 'audited'
-              : 'pending';
-            const st = STATUS_LABEL[auditStatus];
-
-            return (
-              <Link key={item.id} to={`/debate/${item.debateId}`}
-                className="flex items-center gap-3 md:gap-4 bg-surface-container hover:bg-surface-container-high rounded-xl p-3 md:p-4 border border-transparent hover:border-outline-variant/20 transition-all group">
-
-                {/* Tier + rank */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-on-surface/20 font-headline font-bold text-sm w-5 text-right hidden sm:block">
-                    {String(item.rank).padStart(2, '0')}
-                  </span>
-                  <TierBadge tier={item.tier} size="sm" />
-                </div>
-
-                {/* Icon + name */}
-                <div className="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-sm text-on-surface/50">{item.icon}</span>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className="font-headline font-bold text-on-surface text-sm group-hover:text-primary transition-colors truncate" style={{ letterSpacing: '-0.01em' }}>
-                    {item.name}
-                  </p>
-                  <p className="text-xs text-on-surface/40 truncate hidden sm:block">{item.description}</p>
-                </div>
-
-                {/* Consensus bar */}
-                <div className="w-28 md:w-40 shrink-0 hidden sm:block">
-                  <ConsensusBar pct={item.consensusPercentage} tier={item.tier} />
-                </div>
-
-                {/* Mobile pct */}
-                <span className="sm:hidden font-headline font-bold text-sm text-primary">
-                  {item.consensusPercentage.toFixed(0)}%
-                </span>
-
-                {/* Audit status */}
-                <div className="shrink-0 hidden md:flex items-center gap-1">
-                  <span className={`material-symbols-outlined text-sm ${st.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{st.icon}</span>
-                  <span className={`text-xs font-headline font-bold ${st.color}`}>{st.label}</span>
-                  {auditStatus === 'audited' && (
-                    <span className="text-xs text-on-surface/30 font-headline hidden lg:block">Hace {2 + idx}m</span>
-                  )}
-                </div>
-
-                <span className="material-symbols-outlined text-on-surface/20 shrink-0">chevron_right</span>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Paginación — fiel al screenshot */}
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-outline-variant/10">
-          <span className="text-xs text-on-surface/40 font-headline">Página 1 de 48 | 1-10 de 482 activos</span>
-          <div className="flex items-center gap-1">
-            <button className="w-7 h-7 flex items-center justify-center rounded text-on-surface/30">
-              <span className="material-symbols-outlined text-sm">chevron_left</span>
-            </button>
-            {[1, 2, 3].map((p) => (
-              <button key={p} className={`w-7 h-7 rounded text-xs font-headline font-bold transition-all ${
-                p === 1 ? 'bg-primary text-white' : 'text-on-surface/50 hover:bg-surface-container-high'
-              }`}>{p}</button>
+      }
+      leftSidebar={
+        <div className="h-full rounded-2xl border border-white/6 bg-[#0f1829] p-4">
+          <h2 className="text-3xl font-bold tracking-[-0.03em]">El Registro</h2>
+          <p className="text-slate-500">Pulso Institucional</p>
+          <div className="mt-8 space-y-2">
+            {(["Tier-S", "Tier-A", "Tier-B", "Tier-C"] as const).map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setSearchParams({ tier: label.toLowerCase() })}
+                className={`sidebar-action w-full rounded-xl px-4 py-3 text-left ${activeTier === label.toLowerCase() ? "sidebar-action-active bg-[#0052ff]/20 text-[#59a7ff]" : "text-slate-300 hover:bg-white/5"}`}
+              >
+                {label}
+              </button>
             ))}
-            <button className="w-7 h-7 flex items-center justify-center rounded text-on-surface/50 hover:text-on-surface transition-colors">
-              <span className="material-symbols-outlined text-sm">chevron_right</span>
-            </button>
+          </div>
+          <Link to="/feedback" className="mt-8 block w-full rounded-xl bg-[#0052ff] py-3 text-center font-semibold">Nuevo Debate</Link>
+          <div className="mt-4">
+            <SidebarQuickAccess />
           </div>
         </div>
+      }
+    >
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-4xl font-black tracking-[-0.04em] md:text-5xl xl:text-[4rem]">TierList | Rankings Globales</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+              <span className="rounded-full bg-amber-300/15 px-3 py-1 font-semibold tracking-[0.12em] text-amber-200">AUDITADO EN VIVO</span>
+              <span className="text-slate-400">Ultima sincronizacion: hace 12 segundos</span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Link to={`/rankings?tier=${activeTier}`} className="rounded-xl bg-white/5 px-4 py-3">Filtros</Link>
+            <Link to="/rankings?tier=tier-s" className="rounded-xl bg-white/5 px-4 py-3">Impacto</Link>
+          </div>
+        </div>
+
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <article
+            className="rounded-3xl border border-white/6 bg-cover bg-center p-6"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, rgba(11,17,30,0.9), rgba(11,17,30,0.6)), url('https://images.unsplash.com/photo-1621761191319-c6fb62004040?auto=format&fit=crop&w=1400&q=80')",
+            }}
+          >
+            <div className="flex gap-2">
+              <span className="rounded-full bg-[#ff4d4d] px-4 py-1 text-xs font-bold tracking-[0.15em] text-white">TIER-S</span>
+              <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-sm font-semibold text-emerald-300">{data?.hero.consensus}% Consenso</span>
+            </div>
+            <h2 className="mt-6 text-4xl font-black tracking-[-0.04em] md:text-5xl xl:text-[4.25rem]">{data?.hero.name}</h2>
+            <p className="mt-4 max-w-2xl text-base text-slate-300 md:text-lg">La base del valor programable. Lider indiscutible en descentralizacion y seguridad a nivel global.</p>
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.15em] text-slate-400">Votos activos</p>
+                <p className="text-3xl font-bold">{data?.hero.participants} Participantes</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.15em] text-slate-400">Estado de auditoria</p>
+                <p className="text-3xl font-bold text-emerald-300">Verificado</p>
+              </div>
+            </div>
+          </article>
+          <article className="rounded-3xl border border-white/6 bg-[#161f33] p-6">
+            <p className="text-xs uppercase tracking-[0.15em] text-slate-400">Top #02</p>
+            <h3 className="mt-3 text-3xl font-bold tracking-[-0.03em] sm:text-4xl">Chainlink Oracle</h3>
+            <p className="mt-4 text-slate-300">Puente de datos critico para conectividad cross-chain y ejecucion de contratos inteligentes.</p>
+            <div className="mt-10 flex items-center justify-between">
+              <p className="text-5xl font-black text-emerald-300">94.8%</p>
+              <Link to="/feedback/sl-982-ax" className="rounded-2xl bg-white/10 p-3" aria-label="Ver ciclo de debate del activo">
+                <ArrowRight />
+              </Link>
+            </div>
+          </article>
+        </section>
+
+        {rankingVoting?.voting && (
+          <section className="grid gap-3 sm:grid-cols-3">
+            {rankingVoting.voting.map((option) => (
+              <article key={option.label} className="rounded-2xl border border-white/8 bg-[#141d31] px-4 py-4">
+                <p className="text-sm text-slate-300">{option.label}</p>
+                <p className="mt-2 text-3xl font-black" style={{ color: option.color }}>
+                  {option.value}%
+                </p>
+              </article>
+            ))}
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-white/8 bg-[#141d31] p-4 md:p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Herramientas de votacion de ranking</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              "Ventana de votacion activa",
+              "Verificacion en tiempo real",
+              "Validacion al cierre",
+              "Registro final en base de datos",
+            ].map((item) => (
+              <div key={item} className="rounded-lg border border-white/8 bg-[#0f1627] px-3 py-2 text-xs uppercase tracking-[0.1em] text-slate-300">
+                {item}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-white/6 bg-[#161f33]">
+          <div className="overflow-x-auto">
+          <table className="min-w-[860px] w-full text-left">
+            <thead className="bg-white/3 text-xs uppercase tracking-[0.14em] text-slate-400">
+              <tr>
+                <th className="px-5 py-4">Tier</th>
+                <th>Activo institucional</th>
+                <th>Porcentaje de consenso</th>
+                <th>Validacion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAssets.map((asset) => (
+                <tr key={asset.id} className="border-t border-white/6">
+                  <td className="px-5 py-4"><TierBadge tier={asset.tier} /></td>
+                  <td>
+                    <p className="text-xl font-bold tracking-[-0.03em] md:text-2xl">{asset.name}</p>
+                    <p className="text-sm uppercase tracking-[0.12em] text-slate-400">{asset.category}</p>
+                  </td>
+                  <td>
+                    <p className="mb-2 text-sm font-semibold text-slate-300">{asset.consensus}%</p>
+                    <div className="h-2 w-56 rounded-full bg-slate-700">
+                      <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-amber-500" style={{ width: `${asset.consensus}%` }} />
+                    </div>
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-3">
+                      <StatusBadge status={asset.validation} />
+                      <Link
+                        to={`/feedback/${asset.debateId}?asset=${asset.id}`}
+                        className="rounded-lg bg-white/8 px-3 py-2 text-xs font-semibold"
+                        aria-label={`Abrir ciclo de debate de ${asset.name}`}
+                      >
+                        &gt;
+                      </Link>
+                    </div>
+                    <p className="mt-2 text-[11px] uppercase tracking-[0.12em] text-slate-500">Fase: {stageLabelMap[asset.debateStage]}</p>
+                  </td>
+                </tr>
+              ))}
+              {filteredAssets.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-slate-400">
+                    No hay activos para el tier seleccionado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-white/6 px-5 py-4 text-xs uppercase tracking-[0.14em] text-slate-400">
+            <p>PAGINA 1 DE 48 | MOSTRANDO 1-10 DE 482 ACTIVOS</p>
+            <div className="flex items-center gap-2">
+              <Link to="/rankings" className="rounded-lg bg-white/5 px-3 py-2 text-slate-200">1</Link>
+              <Link to="/rankings?page=2" className="rounded-lg bg-transparent px-3 py-2 text-slate-400">2</Link>
+              <Link to="/rankings?page=3" className="rounded-lg bg-transparent px-3 py-2 text-slate-400">3</Link>
+            </div>
+          </div>
+        </section>
       </div>
-    </div>
+    </AppLayout>
   );
 }

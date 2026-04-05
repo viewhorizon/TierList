@@ -1,274 +1,194 @@
-// src/pages/AdminPage.tsx
-// Fiel a: panel_de_administración screenshot
+import { Bell, CheckCircle2, FileWarning, Gauge, Plus, Settings, Shield } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { AppLayout } from "../components/layout/AppLayout";
+import { SidebarQuickAccess, StatusBadge } from "../components/ui";
 
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { svpApi, debatesApi } from '../services/api';
-import { AuditChip, LiveIndicator, LedgerHash } from '../components/ui';
-
-const LEDGER_ENTRIES = [
-  { hash: '0x4F...E2', action: 'VOTE_COMMIT',  delta: '+25',    status: 'AUDITED',    color: 'text-secondary' },
-  { hash: '0x8A...99', action: 'REWARD_DIST',  delta: '+1,500', status: 'VERIFYING',  color: 'text-tertiary' },
-  { hash: '0x22...C1', action: 'SLASH_PENALTY',delta: '-450',   status: 'AUDITED',    color: 'text-red-400' },
-  { hash: '0xEF...34', action: 'BADGE_CLAIM',  delta: '+100',   status: 'AUDITED',    color: 'text-secondary' },
+const rows = [
+  {
+    id: "#SL-982-AX",
+    title: "Marco de Asignacion de Impuesto al Carbono",
+    meta: "Iniciado por Nodo de Finanzas Mundiales - 1,240 Participantes",
+    status: "CALCULO PENDIENTE",
+    action: "Cerrar y Calcular",
+    actionTone: "primary",
+  },
+  {
+    id: "#SL-441-TQ",
+    title: "Protocolo de Jurisdiccion de Asentamientos en Marte",
+    meta: "Iniciado por Autoridad Aeroespacial - 890 Participantes",
+    status: "ACTIVO",
+    action: "En Progreso",
+    actionTone: "muted",
+  },
+  {
+    id: "#SL-009-BV",
+    title: "Umbral de Distribucion de Renta Basica Universal",
+    meta: "Iniciado por Consejo de Equidad Social - 5,600 Participantes",
+    status: "VERIFICADO",
+    action: "Ver Reporte",
+    actionTone: "ghost",
+  },
 ];
 
-const FAILED_LOGS = [
-  { level: 'Critical', label: 'Timeout', time: '12:44:09', event: 'SVP_STATE_COMMIT_FAILURE', trace: 'e773-44b2-a912-ledger-fail' },
-  { level: 'Identity', label: 'Mismatch', time: '12:40:12', event: 'AUTH_NODE_VERIFICATION_REJECT', trace: 'node-99-validator-denied' },
-];
-
-const MOCK_DEBATES_ADMIN = [
-  { id: '#SL-982-AX', title: 'Global Carbon Tax Allocation Framework', origin: 'World Finance Node', participants: 1240, status: 'Pending Calc' },
-  { id: '#SL-441-TQ', title: 'Mars Settlement Jurisdiction Protocol',    origin: 'Aero-Space Authority', participants: 890, status: 'Active' },
-  { id: '#SL-009-BV', title: 'Universal Basic Income Distribution Threshold', origin: 'Social Equity Council', participants: 5600, status: 'Pending Calc' },
-];
-
-export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'debates' | 'logs'>('dashboard');
-  const qc = useQueryClient();
-
-  const { data: metrics } = useQuery({
-    queryKey: ['svp-metrics'],
-    queryFn: () => svpApi.getMetrics(),
-    refetchInterval: 15_000,
-    retry: 1,
+export function AdminPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeSection = searchParams.get("section") ?? "settings";
+  const visibleRows = rows.filter((row) => {
+    if (activeSection === "debates") return row.status !== "VERIFICADO";
+    if (activeSection === "market") return row.status === "VERIFICADO";
+    return true;
   });
-  const { data: transactions } = useQuery({
-    queryKey: ['svp-txs-admin'],
-    queryFn: () => svpApi.getTransactions({ limit: 10 }),
-    refetchInterval: 30_000,
-    retry: 1,
-  });
-
-  const retryMutation = useMutation({
-    mutationFn: svpApi.retry,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['svp-txs-admin'] }),
-  });
-
-  const m = metrics ?? { pending: 42, sent: 1248, failed: 3, acknowledged: 1198, critical: 0 };
-  const txList = transactions?.data ?? [];
 
   return (
-    <div className="min-h-full bg-surface">
-      <div className="max-w-7xl mx-auto px-4 py-5 lg:px-8">
-
-        {/* Header fiel al screenshot */}
-        <div className="mb-6">
-          <p className="text-xs font-headline font-bold uppercase tracking-widest text-on-surface/30 mb-1">Institutional Admin Hub</p>
-          <h1 className="font-headline font-bold text-2xl text-on-surface mb-1" style={{ letterSpacing: '-0.02em' }}>Admin Control Panel</h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-              <span className="text-xs font-headline font-bold text-secondary">SVP Dispatcher Operational · 14ms Latency</span>
+    <AppLayout
+      leftSidebar={
+        <div className="flex h-full flex-col justify-between rounded-2xl border border-white/6 bg-[#131b2e] p-4">
+          <div>
+            <div className="rounded-xl border border-white/8 bg-white/5 p-3">
+              <p className="text-lg font-semibold">Auditor Nvl 42</p>
+              <p className="text-sm text-slate-300">12,450 Puntos</p>
             </div>
-          </div>
-        </div>
-
-        {/* ── Stats strip ── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          {[
-            { label: 'Debates Activos', value: '1,248', icon: 'analytics', sub: '+12%', color: 'text-primary' },
-            { label: 'Pending Calculation', value: String(m.pending), icon: 'hourglass_empty', sub: '', color: 'text-tertiary' },
-            { label: 'Awaiting Audit', value: '156', icon: 'verified_user', sub: '', color: 'text-secondary' },
-            { label: 'Policy Engine', value: 'v2.4.8', icon: 'security', sub: 'Stable', color: 'text-secondary' },
-          ].map((s) => (
-            <div key={s.label} className="bg-surface-container rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`material-symbols-outlined text-base ${s.color}`}>{s.icon}</span>
-                <span className="text-xs text-on-surface/40 font-headline uppercase tracking-wide">{s.label}</span>
-              </div>
-              <p className={`font-headline font-bold text-xl ${s.color}`} style={{ letterSpacing: '-0.02em' }}>{s.value}</p>
-              {s.sub && <p className="text-xs text-secondary font-headline">{s.sub}</p>}
-            </div>
-          ))}
-        </div>
-
-        <div className="grid lg:grid-cols-[1fr_360px] gap-6">
-
-          {/* ── Main panel ── */}
-          <div className="space-y-5">
-
-            {/* Tabs */}
-            <div className="flex gap-1 bg-surface-container p-1 rounded-xl w-fit">
-              {(['dashboard', 'debates', 'logs'] as const).map((tab) => (
-                <button key={tab} onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-headline font-bold transition-all capitalize ${
-                    activeTab === tab ? 'bg-primary text-white' : 'text-on-surface/50 hover:text-on-surface'
-                  }`}>
-                  {tab === 'dashboard' ? 'SVP Dispatcher' : tab === 'debates' ? 'Debates' : 'Logs'}
+            <div className="mt-5 space-y-2 text-slate-300">
+                {[
+                  { label: "Panel Principal", icon: Gauge, key: "overview" },
+                  { label: "Debates Activos", icon: Bell, key: "debates" },
+                  { label: "Mercado", icon: Shield, key: "market" },
+                  { label: "Ajustes", icon: Settings, key: "settings" },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setSearchParams({ section: item.key })}
+                  className={`sidebar-action flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left ${activeSection === item.key ? "sidebar-action-active bg-[#0052ff] text-white" : "hover:bg-white/5"}`}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
                 </button>
               ))}
             </div>
-
-            {/* SVP Dispatcher tab */}
-            {activeTab === 'dashboard' && (
-              <div className="space-y-2">
-                <p className="text-xs font-headline font-bold uppercase tracking-widest text-on-surface/30 mb-2">
-                  Debate Moderation Control · Live Ledger Sync
-                </p>
-                {MOCK_DEBATES_ADMIN.map((d) => (
-                  <div key={d.id} className="flex items-center gap-3 bg-surface-container rounded-xl p-4 border border-outline-variant/10">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs font-mono text-on-surface/30">{d.id}</span>
-                        <span className={`text-xs font-headline font-bold px-2 py-0.5 rounded ${
-                          d.status === 'Pending Calc' ? 'text-tertiary bg-tertiary/10' : 'text-secondary bg-secondary/10'
-                        }`}>{d.status}</span>
-                      </div>
-                      <p className="font-headline font-bold text-sm text-on-surface truncate">{d.title}</p>
-                      <p className="text-xs text-on-surface/40">Initiated by {d.origin} · {d.participants.toLocaleString()} Participants</p>
-                    </div>
-                    {d.status === 'Pending Calc' && (
-                      <button className="shrink-0 flex items-center gap-1.5 text-xs bg-surface-container-high hover:bg-primary/10 text-on-surface/60 hover:text-primary font-headline font-bold px-3 py-1.5 rounded-lg transition-all">
-                        <span className="material-symbols-outlined text-sm">lock_open</span>
-                        Close & Calculate
-                      </button>
-                    )}
-                    {d.status === 'Active' && (
-                      <button className="shrink-0 flex items-center gap-1.5 text-xs bg-tertiary/10 text-tertiary font-headline font-bold px-3 py-1.5 rounded-lg">
-                        <span className="material-symbols-outlined text-sm">hourglass_empty</span>
-                        In Progress
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Debates tab — SVP transactions */}
-            {activeTab === 'debates' && (
-              <div className="space-y-2">
-                {(txList.length > 0 ? txList : [
-                  { id: 't1', eventId: 'evt-0x4F...E2', status: 'SENT' as const, retryCount: 0, payload: { metadata: { calculatedPoints: 6000 } }, createdAt: new Date().toISOString(), signature: '', lastError: undefined },
-                  { id: 't2', eventId: 'evt-0x8A...99', status: 'FAILED' as const, retryCount: 2, lastError: 'SVP timeout 10s', payload: { metadata: { calculatedPoints: 1500 } }, createdAt: new Date().toISOString(), signature: '' },
-                  { id: 't3', eventId: 'evt-0x22...C1', status: 'PENDING' as const, retryCount: 0, payload: { metadata: { calculatedPoints: 3200 } }, createdAt: new Date().toISOString(), signature: '', lastError: undefined },
-                ]).map((tx) => {
-                  const cfg = {
-                    PENDING:          { label: 'Pendiente',  color: 'text-tertiary bg-tertiary/10' },
-                    SENT:             { label: 'Enviado',    color: 'text-secondary bg-secondary/10' },
-                    FAILED:           { label: 'Fallido',    color: 'text-red-400 bg-red-400/10' },
-                    ACKNOWLEDGED:     { label: 'Confirmado', color: 'text-primary bg-primary/10' },
-                    CRITICAL_FAILURE: { label: 'Crítico',    color: 'text-red-500 bg-red-500/20' },
-                  }[tx.status] ?? { label: tx.status, color: 'text-on-surface/40 bg-on-surface/5' };
-                  return (
-                    <div key={tx.id} className="flex items-center gap-3 bg-surface-container rounded-xl p-3 border border-outline-variant/10">
-                      <span className={`text-xs font-headline font-bold px-2 py-0.5 rounded shrink-0 ${cfg.color}`}>{cfg.label}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-mono text-on-surface/50 truncate">{tx.eventId}</p>
-                        <p className="text-xs text-on-surface/30">{tx.retryCount} reintentos{tx.lastError ? ` · ${tx.lastError}` : ''}</p>
-                      </div>
-                      {tx.status === 'FAILED' && (
-                        <button onClick={() => retryMutation.mutate(tx.id)}
-                          className="shrink-0 flex items-center gap-1 text-xs bg-primary/10 text-primary hover:bg-primary/20 px-2.5 py-1.5 rounded-lg font-headline font-bold transition-all">
-                          <span className="material-symbols-outlined text-sm">refresh</span>
-                          Reintentar
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Logs tab */}
-            {activeTab === 'logs' && (
-              <div className="space-y-2">
-                <p className="text-xs font-headline font-bold text-red-400 uppercase tracking-widest mb-2">report Failed Event Logs</p>
-                {FAILED_LOGS.map((log, i) => (
-                  <div key={i} className="flex items-start gap-3 bg-red-400/5 border border-red-400/20 rounded-xl p-4">
-                    <span className="material-symbols-outlined text-sm text-red-400 shrink-0">error</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-headline font-bold text-red-400">{log.level} {log.label}</span>
-                        <span className="text-xs font-mono text-on-surface/30">{log.time}</span>
-                      </div>
-                      <p className="text-xs text-on-surface/50 font-mono">Event: {log.event}</p>
-                      <p className="text-xs text-on-surface/30 font-mono">Trace: {log.trace}</p>
-                    </div>
-                    <button className="shrink-0 text-xs text-primary font-headline font-bold hover:opacity-80">
-                      <span className="material-symbols-outlined text-sm">refresh</span>
-                    </button>
-                  </div>
-                ))}
-                <p className="text-xs text-on-surface/30 font-headline text-center py-2">End of High Priority Failures</p>
-              </div>
-            )}
           </div>
-
-          {/* ── Right: Ledger + Policy ── */}
-          <div className="space-y-4">
-
-            {/* Recent Ledger Entries — fiel al screenshot */}
-            <div className="bg-surface-container rounded-xl p-4 border border-outline-variant/10">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="material-symbols-outlined text-sm text-on-surface/40">list_alt</span>
-                <p className="text-xs font-headline font-bold uppercase tracking-widest text-on-surface/30">Recent Ledger Entries</p>
-              </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-outline-variant/10">
-                    {['Object ID', 'Action', 'Δ Points', 'Status'].map((h) => (
-                      <th key={h} className="pb-2 text-left text-xs font-headline font-bold text-on-surface/20 uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {LEDGER_ENTRIES.map((e) => (
-                    <tr key={e.hash} className="border-b border-outline-variant/5">
-                      <td className="py-2"><LedgerHash hash={e.hash} /></td>
-                      <td className="py-2 text-xs font-mono text-on-surface/50">{e.action}</td>
-                      <td className={`py-2 text-xs font-headline font-bold ${e.color}`}>{e.delta}</td>
-                      <td className="py-2"><span className={`text-xs font-headline font-bold ${e.color}`}>{e.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Policy Engine — fiel al screenshot */}
-            <div className="bg-surface-container rounded-xl p-4 border border-outline-variant/10">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="material-symbols-outlined text-sm text-secondary">security</span>
-                <p className="text-xs font-headline font-bold text-secondary">Policy Engine v2.4.8-Stable</p>
-              </div>
-              <div className="space-y-2 text-xs font-headline">
-                {[
-                  { label: 'Consensus Logic', value: 'Optimized', color: 'text-secondary' },
-                  { label: 'Node Validation', value: 'Active', color: 'text-secondary' },
-                  { label: 'Error Threshold', value: '0.002%', color: 'text-tertiary' },
-                ].map((row) => (
-                  <div key={row.label} className="flex items-center justify-between">
-                    <span className="text-on-surface/40">{row.label}</span>
-                    <span className={`font-bold ${row.color}`}>{row.value}</span>
-                  </div>
-                ))}
-              </div>
-              <button className="w-full mt-3 text-xs font-headline font-bold text-on-surface/50 hover:text-on-surface bg-surface-container-high py-2 rounded-lg transition-colors">
-                Check for Updates
-              </button>
-            </div>
-
-            {/* SVP metrics */}
-            <div className="bg-surface-container rounded-xl p-4 border border-outline-variant/10">
-              <p className="text-xs font-headline font-bold uppercase tracking-widest text-on-surface/30 mb-3">SVP Dispatcher Metrics</p>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: 'Pending', value: m.pending, color: 'text-tertiary' },
-                  { label: 'Sent', value: m.sent, color: 'text-secondary' },
-                  { label: 'Failed', value: m.failed, color: 'text-red-400' },
-                  { label: 'Acknowledged', value: m.acknowledged, color: 'text-primary' },
-                ].map((s) => (
-                  <div key={s.label} className="bg-surface-container-high rounded-lg p-2.5 text-center">
-                    <p className={`font-headline font-bold text-lg ${s.color}`}>{s.value}</p>
-                    <p className="text-xs text-on-surface/30 font-headline">{s.label}</p>
-                  </div>
-                ))}
-              </div>
+          <div>
+            <Link to="/debate" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0052ff] py-3 font-semibold">
+              <Plus className="h-4 w-4" /> Crear Debate
+            </Link>
+            <div className="mt-4">
+              <SidebarQuickAccess />
             </div>
           </div>
         </div>
+      }
+      rightSidebar={
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-emerald-400/30 bg-[#131c2f] p-4 text-emerald-300">
+            <p className="text-sm uppercase tracking-[0.12em] text-slate-300">Despachador SVP</p>
+            <p className="mt-1 text-xl font-semibold">Operacional - 14ms Latencia</p>
+          </div>
+          <div className="rounded-2xl border border-white/6 bg-[#161f33] p-5">
+            <h3 className="text-sm uppercase tracking-[0.14em] text-slate-400">Motor de Politicas</h3>
+            <p className="mt-2 text-3xl font-bold tracking-[-0.03em]">v2.4.8-Stable</p>
+            <p className="text-sm text-slate-400">Actualizado: hace 2h</p>
+            <div className="mt-5 space-y-2">
+              <p className="flex justify-between"><span className="text-slate-400">Logica de Consenso</span><span className="text-emerald-300">Optimizado</span></p>
+              <p className="flex justify-between"><span className="text-slate-400">Validacion de Nodo</span><span className="text-emerald-300">Activa</span></p>
+              <p className="flex justify-between"><span className="text-slate-400">Umbral de Error</span><span className="text-amber-300">0.002%</span></p>
+            </div>
+            <Link to="/audit" className="mt-6 block w-full rounded-lg border border-white/20 py-3 text-center font-semibold">Buscar Actualizaciones</Link>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-7">
+        <header>
+          <p className="text-sm uppercase tracking-[0.14em] text-slate-400">Centro de Administracion Institucional</p>
+          <h1 className="text-4xl font-black tracking-[-0.04em] md:text-5xl">Panel de Control Admin</h1>
+        </header>
+
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="rounded-3xl border border-white/6 bg-[#161f33] p-6">
+            <h2 className="text-3xl font-bold tracking-[-0.03em]">Monitor de Ciclo de Vida del Debate</h2>
+            <div className="mt-3 flex items-end gap-4">
+              <p className="text-6xl font-black md:text-8xl">1,248</p>
+              <p className="rounded-lg bg-emerald-500/15 px-3 py-2 text-emerald-300">+12%</p>
+            </div>
+            <p className="max-w-xl text-slate-300">Debates globales activos procesandose actualmente en todos los nodos institucionales.</p>
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl bg-white/6 p-4">
+                <p className="text-slate-400">Calculo pendiente</p>
+                <p className="text-5xl font-black text-amber-300">42</p>
+              </div>
+              <div className="rounded-xl bg-white/6 p-4">
+                <p className="text-slate-400">Esperando auditoria</p>
+                <p className="text-5xl font-black">156</p>
+              </div>
+            </div>
+          </div>
+          <div className="hidden xl:block" />
+        </section>
+
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-3xl font-bold tracking-[-0.03em]">Control de Moderacion de Debates</h2>
+          <p className="hidden text-sm uppercase tracking-[0.12em] text-emerald-300 md:block">Sincronizacion de Libro en Vivo</p>
+        </div>
+
+        <section className="overflow-hidden rounded-2xl border border-white/6 bg-[#161f33]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[920px] text-left">
+              <thead className="bg-white/5 text-xs uppercase tracking-[0.13em] text-slate-400">
+                <tr>
+                  <th className="px-5 py-4">ID Debate</th>
+                  <th>Titulo del Debate</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row) => (
+                  <tr key={row.id} className="border-t border-white/6">
+                    <td className="px-5 py-5 font-semibold text-slate-300">{row.id}</td>
+                    <td>
+                      <p className="text-[1.45rem] font-bold tracking-[-0.03em]">{row.title}</p>
+                      <p className="text-sm text-slate-400">{row.meta}</p>
+                    </td>
+                    <td><StatusBadge status={row.status} /></td>
+                    <td>
+                      <Link
+                        to={row.id === "#SL-982-AX" ? "/feedback/SL-982-AX" : row.id === "#SL-441-TQ" ? "/feedback/SL-441-TQ" : "/feedback/SL-009-BV"}
+                        className={`inline-block rounded-xl px-5 py-2 text-sm font-semibold ${
+                          row.actionTone === "primary"
+                            ? "bg-[#0052ff]"
+                            : row.actionTone === "ghost"
+                              ? "bg-white/12"
+                              : "bg-slate-700/70 text-slate-300"
+                        }`}
+                      >
+                        {row.action}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+                {visibleRows.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-slate-400">
+                      Sin registros para la seccion seleccionada.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2">
+          <article className="rounded-2xl border border-white/6 bg-[#161f33] p-5">
+            <p className="flex items-center gap-2 text-amber-300"><CheckCircle2 className="h-4 w-4" /> Entradas Recientes del Libro</p>
+            <p className="mt-3 text-slate-300">Ultima sincronizacion validada hace 14 segundos en nodo institucional primario.</p>
+          </article>
+          <article className="rounded-2xl border border-white/6 bg-[#161f33] p-5">
+            <p className="flex items-center gap-2 text-rose-300"><FileWarning className="h-4 w-4" /> Registros de Eventos Fallidos</p>
+            <p className="mt-3 text-slate-300">No se detectaron alertas criticas en esta ventana de auditoria.</p>
+          </article>
+        </section>
       </div>
-    </div>
+    </AppLayout>
   );
 }

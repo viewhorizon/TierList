@@ -1,157 +1,149 @@
-// src/components/ui/index.tsx
-// Componentes reutilizables del Design System
+import { motion } from "framer-motion";
+import { Bell, Search, Settings, UserCircle2 } from "lucide-react";
+import { Link, NavLink } from "react-router-dom";
+import { cn } from "../../utils/cn";
 
-import React, { ReactNode } from 'react';
-
-// ── Estado de carga / error / vacío ──────────────────────────
-
-interface StateWrapperProps {
-  loading?: boolean;
-  error?: Error | null;
-  empty?: boolean;
-  emptyMessage?: string;
-  children: ReactNode;
-  skeleton?: ReactNode;
-}
-
-export function StateWrapper({ loading, error, empty, emptyMessage, children, skeleton }: StateWrapperProps) {
-  if (loading) return <>{skeleton ?? <DefaultSkeleton />}</>;
-  if (error)   return <ErrorState error={error} />;
-  if (empty)   return <EmptyState message={emptyMessage} />;
-  return <>{children}</>;
-}
-
-function DefaultSkeleton() {
+export function Brand({ title = "TierList", subtitle }: { title?: string; subtitle?: string }) {
   return (
-    <div className="p-6 space-y-4">
-      {[...Array(4)].map((_, i) => (
-        <div key={i} className="bg-surface-container rounded-xl h-16 animate-pulse" style={{ opacity: 1 - i * 0.15 }} />
-      ))}
-    </div>
-  );
-}
-
-function ErrorState({ error }: { error: Error }) {
-  const isAuth    = error.message.includes('autenticado') || error.message.includes('UNAUTHORIZED');
-  const isForbid  = error.message.includes('permisos') || error.message.includes('FORBIDDEN');
-  const isRate    = error.message.includes('solicitudes') || error.message.includes('RATE');
-
-  const icon = isAuth ? 'lock' : isForbid ? 'block' : isRate ? 'hourglass_empty' : 'error_outline';
-  const color = isRate ? 'text-tertiary' : 'text-red-400';
-
-  return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <span className={`material-symbols-outlined text-4xl ${color}`}>{icon}</span>
-      <p className={`font-headline font-bold text-sm ${color}`}>{error.message}</p>
-    </div>
-  );
-}
-
-function EmptyState({ message }: { message?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 gap-3">
-      <span className="material-symbols-outlined text-4xl text-on-surface/20">inbox</span>
-      <p className="text-on-surface/40 text-sm font-headline">{message ?? 'Sin resultados.'}</p>
-    </div>
-  );
-}
-
-// ── Tier Badge — fiel a colores de los screenshots ────────────
-
-const TIER_CFG = {
-  S: { text: 'text-primary',       bg: 'bg-primary/10',      border: 'border-primary/40',      icon: 'military_tech' },
-  A: { text: 'text-secondary',     bg: 'bg-secondary/10',    border: 'border-secondary/40',    icon: 'grade' },
-  B: { text: 'text-tertiary',      bg: 'bg-tertiary/10',     border: 'border-tertiary/40',     icon: 'star' },
-  C: { text: 'text-on-surface/50', bg: 'bg-on-surface/5',    border: 'border-on-surface/20',   icon: 'star_half' },
-} as const;
-
-interface TierBadgeProps {
-  tier: 'S' | 'A' | 'B' | 'C';
-  showIcon?: boolean;
-  size?: 'sm' | 'md' | 'lg';
-}
-
-export function TierBadge({ tier, showIcon = true, size = 'md' }: TierBadgeProps) {
-  const cfg = TIER_CFG[tier];
-  const sizes = { sm: 'text-xs px-1.5 py-0.5', md: 'text-sm px-2.5 py-1', lg: 'text-base px-3 py-1.5' };
-  return (
-    <span className={`inline-flex items-center gap-1 font-headline font-bold rounded border ${cfg.text} ${cfg.bg} ${cfg.border} ${sizes[size]}`}>
-      {showIcon && <span className="material-symbols-outlined" style={{ fontSize: 'inherit' }}>{cfg.icon}</span>}
-      Tier-{tier}
-    </span>
-  );
-}
-
-// ── Audit Chip — "AUDITADO" / "VERIFICADO" / "EN PROCESO" ────
-
-interface AuditChipProps {
-  status: 'audited' | 'verifying' | 'pending' | 'winner';
-  label?: string;
-}
-
-export function AuditChip({ status, label }: AuditChipProps) {
-  const cfg = {
-    audited:   { text: 'text-secondary', bg: 'bg-secondary/10', icon: 'verified',        default: 'AUDITADO' },
-    verifying: { text: 'text-tertiary',  bg: 'bg-tertiary/10',  icon: 'sync',            default: 'EN PROCESO' },
-    pending:   { text: 'text-on-surface/40', bg: 'bg-on-surface/5', icon: 'schedule',    default: 'PENDIENTE' },
-    winner:    { text: 'text-secondary', bg: 'bg-secondary/10', icon: 'workspace_premium', default: 'GANADOR' },
-  }[status];
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-headline font-bold px-2 py-1 rounded ${cfg.text} ${cfg.bg}`}>
-      <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>{cfg.icon}</span>
-      {label ?? cfg.default}
-    </span>
-  );
-}
-
-// ── Ledger Hash — 0x4F...E2 style ─────────────────────────────
-
-export function LedgerHash({ hash, full = false }: { hash: string; full?: boolean }) {
-  const display = full ? hash : `${hash.slice(0, 6)}...${hash.slice(-4)}`;
-  return (
-    <span className="font-mono text-xs text-on-surface/30 tracking-wide">{display}</span>
-  );
-}
-
-// ── Consensus Bar ─────────────────────────────────────────────
-
-export function ConsensusBar({ pct, tier = 'S' }: { pct: number; tier?: 'S' | 'A' | 'B' | 'C' }) {
-  const colors = { S: 'bg-primary', A: 'bg-secondary', B: 'bg-tertiary', C: 'bg-on-surface/40' };
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-700 ${colors[tier]}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+    <Link to="/explore" className="inline-flex min-w-0 items-center gap-2.5">
+      <div className="grid h-8 w-8 grid-cols-2 gap-1 rounded-sm bg-[#0052ff] p-1">
+        <div className="rounded-[1px] bg-[#8fc0ff]" />
+        <div className="rounded-[1px] bg-[#d5e6ff]" />
+        <div className="rounded-[1px] bg-[#2a79ff]" />
+        <div className="rounded-[1px] bg-[#0e3d99]" />
       </div>
-      <span className={`text-xs font-headline font-bold w-10 text-right ${TIER_CFG[tier].text}`}>
-        {pct.toFixed(1)}%
-      </span>
-    </div>
+      <div className="min-w-0">
+        <p className="truncate text-[1.5rem] font-extrabold leading-none tracking-[-0.04em] text-slate-100 sm:text-[1.65rem]">{title}</p>
+        {subtitle && <p className="text-xs uppercase tracking-[0.2em] text-[#2f8bff]">{subtitle}</p>}
+      </div>
+    </Link>
   );
 }
 
-// ── Live indicator ────────────────────────────────────────────
-
-export function LiveIndicator({ label = 'Auditado en Vivo' }: { label?: string }) {
+export function NavItem({
+  to,
+  children,
+  onClick,
+  end,
+}: {
+  to: string;
+  children: string;
+  onClick?: () => void;
+  end?: boolean;
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-headline font-bold text-secondary">
-      <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-      {label}
-    </span>
+    <NavLink
+      to={to}
+      onClick={onClick}
+      end={end}
+      className={({ isActive }) =>
+        cn(
+          "block w-full overflow-hidden text-ellipsis whitespace-nowrap border-b-2 border-transparent px-1.5 pb-2 text-center text-sm font-medium text-slate-300 hover:text-white md:text-base",
+          isActive && "border-[#0052ff] text-[#2f8bff]",
+        )
+      }
+    >
+      {children}
+    </NavLink>
   );
 }
 
-// ── Page header — patrón común en todos los screenshots ───────
-
-export function PageHeader({ eyebrow, title, subtitle }: { eyebrow?: string; title: string; subtitle?: string }) {
+export function SearchField({ placeholder }: { placeholder: string }) {
   return (
-    <div className="mb-6 lg:mb-8">
-      {eyebrow && (
-        <p className="text-xs font-bold uppercase tracking-widest text-primary/80 font-headline mb-2">{eyebrow}</p>
+    <label className="flex h-11 w-[clamp(12rem,23vw,20rem)] min-w-0 items-center gap-2 rounded-full border border-white/6 bg-[#131b2e] px-4 text-slate-400 focus-within:ring-2 focus-within:ring-[#0052ff]">
+      <Search className="h-4 w-4" aria-hidden="true" />
+      <input
+        className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-500"
+        placeholder={placeholder}
+        aria-label={placeholder}
+      />
+    </label>
+  );
+}
+
+export function TierBadge({ tier }: { tier: string }) {
+  const style = {
+    S: "bg-[#ff4d4d] text-white",
+    A: "bg-[#f8c45d] text-[#111827]",
+    B: "bg-[#ecf16e] text-[#111827]",
+    C: "bg-[#4edea3] text-[#052b1d]",
+  }[tier] ?? "bg-slate-700 text-slate-100";
+  return <span className={cn("rounded-md px-3 py-1 text-xs font-bold tracking-[0.1em]", style)}>TIER {tier}</span>;
+}
+
+export function StatusBadge({ status }: { status: string }) {
+  const tone =
+    status === "VERIFICADO"
+      ? "bg-emerald-500/15 text-emerald-300"
+      : status === "AUDITORIA" || status === "AUDITANDO" || status === "EN PROCESO" || status === "EN CURSO"
+        ? "bg-amber-400/15 text-amber-300"
+        : status === "FINALIZADO"
+          ? "bg-cyan-400/15 text-cyan-300"
+          : "bg-slate-500/20 text-slate-400";
+  return <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", tone)}>{status}</span>;
+}
+
+export function MetricTile({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  tone: "blue" | "green" | "amber" | "slate";
+}) {
+  const border = {
+    blue: "before:bg-[#0052ff]",
+    green: "before:bg-[#4edea3]",
+    amber: "before:bg-[#ffb95f]",
+    slate: "before:bg-slate-300",
+  }[tone];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className={cn(
+        "relative rounded-2xl border border-white/6 bg-[#161f33] p-5 before:absolute before:inset-y-0 before:left-0 before:w-1 before:rounded-l-2xl",
+        border,
       )}
-      <h1 className="font-headline font-bold text-2xl lg:text-3xl text-on-surface" style={{ letterSpacing: '-0.02em' }}>
-        {title}
-      </h1>
-      {subtitle && <p className="text-on-surface/50 text-sm mt-1">{subtitle}</p>}
+    >
+      <p className="text-xs uppercase tracking-[0.15em] text-slate-400">{label}</p>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <p className="text-4xl font-bold tracking-[-0.03em] text-white md:text-5xl">{value}</p>
+        {note && <p className="text-sm font-semibold text-slate-300">{note}</p>}
+      </div>
+    </motion.div>
+  );
+}
+
+export function SidebarQuickAccess() {
+  const items = [
+    { to: "/settings", label: "Configuracion", icon: Settings },
+    { to: "/profile", label: "Perfil", icon: UserCircle2 },
+    { to: "/notifications", label: "Notificaciones", icon: Bell },
+  ];
+
+  return (
+    <div className="space-y-1.5 border-t border-white/8 pt-4">
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={({ isActive }) =>
+            cn(
+              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200",
+              isActive && "bg-white/8 text-slate-100",
+            )
+          }
+        >
+          <item.icon className="h-4 w-4" />
+          {item.label}
+        </NavLink>
+      ))}
     </div>
   );
 }

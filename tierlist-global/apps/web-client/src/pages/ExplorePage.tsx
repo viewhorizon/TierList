@@ -1,183 +1,159 @@
-// src/pages/ExplorePage.tsx
-// Fiel a: tierlist_dashboard_geometría_perfeccionada + tierlist_dashboard_principal_móvil
+import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import { Globe, Map, Radio, RotateCcw } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { AppLayout } from "../components/layout/AppLayout";
+import { MetricTile, SidebarQuickAccess, StatusBadge } from "../components/ui";
+import { fetchExploreData } from "../services/api";
 
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { debatesApi } from '../services/api';
-import { StateWrapper, LiveIndicator, PageHeader } from '../components/ui';
-import type { Debate } from '../types';
-
-// Datos de fallback tomados literalmente del screenshot
-const FALLBACK_DEBATES: Debate[] = [
-  { id: 'sl-2024-001', title: 'Voto Cuadrático en Tier-3', description: 'Debate sobre la transición de sistemas de mayoría simple a modelos cuadráticos para nodos institucionales.', category: 'Gobernanza', scope: 'GLOBAL', status: 'OPEN', participantCount: 42000, startDate: '', endDate: '', configRules: {}, createdBy: '', createdAt: '', totalVotes: 42000 },
-  { id: 'sl-2024-002', title: 'Protocolo de Emergencia', description: 'Revisión de disparadores automáticos para el bloqueo de transacciones sospechosas en el Ledger Central.', category: 'Seguridad', scope: 'GLOBAL', status: 'OPEN', participantCount: 8000, startDate: '', endDate: '', configRules: {}, createdBy: '', createdAt: '', totalVotes: 8000 },
-  { id: 'sl-2024-003', title: 'Redistribución de Nodos Regionales', description: 'Arquitectura de Consenso: El Futuro del Protocolo Soberano. Únete al debate sobre redistribución de nodos.', category: 'Infraestructura', scope: 'GLOBAL', status: 'OPEN', participantCount: 1200000, startDate: '', endDate: '', configRules: {}, createdBy: '', createdAt: '', totalVotes: 1200000 },
-  { id: 'sl-2024-004', title: 'Reestructuración de Comisiones Layer 2', description: 'La reducción del 15% es bienvenida. Necesitamos visualización en tiempo real antes de la votación final.', category: 'Economía', scope: 'LOCAL', status: 'OPEN', participantCount: 3400, startDate: '', endDate: '', configRules: {}, createdBy: '', createdAt: '', totalVotes: 3400 },
-  { id: 'sl-2024-005', title: 'Optimización del Dashboard Institucional', description: 'Los nuevos gráficos de dispersión requieren modo simplificado para resoluciones estándar.', category: 'UX', scope: 'LOCAL', status: 'OPEN', participantCount: 890, startDate: '', endDate: '', configRules: {}, createdBy: '', createdAt: '', totalVotes: 890 },
-  { id: 'sl-2024-006', title: 'Descentralización de Nodos Emergentes', description: 'Implementación de salvaguardas contra colusión de pools de staking en regiones emergentes.', category: 'Gobernanza', scope: 'GLOBAL', status: 'OPEN', participantCount: 15600, startDate: '', endDate: '', configRules: {}, createdBy: '', createdAt: '', totalVotes: 15600 },
+const filters = [
+  { key: "global", label: "Global Tiers", icon: Globe },
+  { key: "regional", label: "Regional Tiers", icon: Map },
+  { key: "emerging", label: "Emerging Tiers", icon: Radio },
+  { key: "archived", label: "Archived Tiers", icon: RotateCcw },
 ];
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Gobernanza:      'text-primary bg-primary/10',
-  Seguridad:       'text-tertiary bg-tertiary/10',
-  Infraestructura: 'text-secondary bg-secondary/10',
-  Economía:        'text-tertiary bg-tertiary/10',
-  UX:              'text-on-surface/50 bg-on-surface/5',
-  Ciencia:         'text-secondary bg-secondary/10',
-};
-
-export default function ExplorePage() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['debates', 'explore'],
-    queryFn: () => debatesApi.getAll({ status: 'OPEN', limit: 12 }),
-    retry: 2,
+export function ExplorePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { data } = useQuery({ queryKey: ["explore"], queryFn: fetchExploreData, retry: 2 });
+  const activeFilter = searchParams.get("tier") ?? "global";
+  const filteredDebates = (data?.debates ?? []).filter((debate) => {
+    if (activeFilter === "global") return debate.status !== "BORRADOR";
+    if (activeFilter === "regional") return debate.id.endsWith("005") || debate.id.endsWith("001");
+    if (activeFilter === "emerging") return debate.status === "AUDITORIA" || debate.status === "VERIFICADO";
+    if (activeFilter === "archived") return debate.status === "FINALIZADO" || debate.status === "BORRADOR";
+    return true;
   });
 
-  const debates = data?.data ?? FALLBACK_DEBATES;
-  const heroDebate = debates[2] ?? debates[0];
-
   return (
-    <div className="min-h-full bg-surface">
-
-      {/* ── Hero — "Arquitectura de Consenso" del screenshot ── */}
-      <div className="relative overflow-hidden bg-surface-container border-b border-outline-variant/10">
-        <div className="absolute inset-0 bg-gradient-to-t from-surface-container via-transparent to-transparent opacity-80" />
-        {/* Decorative grid lines fiel al screenshot */}
-        <div className="absolute inset-0 opacity-5"
-          style={{ backgroundImage: 'linear-gradient(#0052ff 1px, transparent 1px), linear-gradient(90deg, #0052ff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-
-        <div className="relative px-6 py-8 lg:px-8 lg:py-10 max-w-7xl mx-auto">
-          <div className="flex items-center gap-2 mb-3">
-            <LiveIndicator label="Ledger Auditado: Real-Time" />
-            <span className="text-xs text-on-surface/30 font-headline">BLOQUE #882,192,001 · ESTADO FINALIZADO</span>
+    <AppLayout
+      contextPanel={
+        <div className="space-y-5 rounded-2xl border border-white/8 bg-[#10192c] p-4">
+          <h3 className="text-lg font-bold tracking-[-0.02em]">Panel Explore</h3>
+          <p className="text-sm text-slate-400">Accesos rapidos del modulo para busqueda, estado y sincronizacion.</p>
+          <div className="space-y-2">
+            <Link to="/notifications" className="block rounded-lg bg-white/6 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">Ver notificaciones</Link>
+            <Link to="/profile" className="block rounded-lg bg-white/6 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">Ir a perfil</Link>
+            <Link to="/settings" className="block rounded-lg bg-white/6 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">Configuracion de cuenta</Link>
           </div>
-
-          <div className="grid lg:grid-cols-2 gap-8 items-center">
-            <div>
-              <h2 className="font-headline font-bold text-2xl lg:text-3xl text-on-surface mb-3" style={{ letterSpacing: '-0.02em' }}>
-                Arquitectura de Consenso:<br />
-                <span className="text-primary">El Futuro del Protocolo Soberano.</span>
-              </h2>
-              <p className="text-on-surface/60 text-sm mb-5 leading-relaxed">
-                Únete al debate activo sobre la redistribución de nodos regionales en el estrato global. 1.2M votos verificados.
-              </p>
-              <div className="flex gap-3">
-                <Link to={`/debate/${heroDebate.id}`}
-                  className="inline-flex items-center gap-2 bg-primary text-white font-headline font-bold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition-all">
-                  <span className="material-symbols-outlined text-base">how_to_vote</span>
-                  Votar Ahora
-                </Link>
-                <button className="inline-flex items-center gap-2 bg-surface-container-high text-on-surface/70 font-headline font-bold text-sm px-5 py-2.5 rounded-lg hover:text-on-surface transition-all">
-                  Ver Análisis
+        </div>
+      }
+      leftSidebar={
+        <div className="flex h-full flex-col justify-between rounded-2xl border border-white/6 bg-[#0f1829] p-4">
+          <div className="space-y-2">
+            <p className="text-xl font-bold">Tier Filters</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Verified Audit Strata</p>
+            <div className="space-y-2 pt-5">
+              {filters.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setSearchParams({ tier: item.key })}
+                  className={`sidebar-action flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left ${activeFilter === item.key ? "sidebar-action-active bg-[#0052ff]/20 text-[#50a2ff]" : "text-slate-300 hover:bg-white/5"}`}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
                 </button>
-              </div>
-            </div>
-
-            {/* Stats strip del screenshot */}
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Debates Activos', value: '1,429', change: '+12%', icon: 'forum', color: 'text-primary' },
-                { label: 'Consenso Global', value: '88.4%', sub: 'Estable', icon: 'check_circle', color: 'text-secondary' },
-                { label: 'Tiers Verificados', value: '24', sub: 'Total: 32', icon: 'verified', color: 'text-tertiary' },
-                { label: 'Auditoría TierList', value: '99.9', sub: 'Inmune', icon: 'security', color: 'text-primary' },
-              ].map((s) => (
-                <div key={s.label} className="bg-surface-container-high rounded-xl p-4">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className={`material-symbols-outlined text-base ${s.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{s.icon}</span>
-                    <span className="text-xs text-on-surface/40 font-headline uppercase tracking-wide">{s.label}</span>
-                  </div>
-                  <p className={`font-headline font-bold text-xl ${s.color}`} style={{ letterSpacing: '-0.02em' }}>{s.value}</p>
-                  {s.change && <p className="text-xs text-secondary font-headline">{s.change}</p>}
-                  {s.sub && <p className="text-xs text-on-surface/40 font-headline">{s.sub}</p>}
-                </div>
               ))}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Muro de Debates Recientes ── */}
-      <div className="px-6 py-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <p className="text-xs text-on-surface/40 font-headline mb-0.5">Última actualización: hace 4 minutos.</p>
-            <h2 className="font-headline font-bold text-base text-on-surface" style={{ letterSpacing: '-0.01em' }}>
-              Muro de Debates Recientes
-            </h2>
+          <div className="space-y-3">
+            <Link
+              to="/notifications"
+              className="block w-full rounded-xl bg-[#0052ff] py-3 text-center font-semibold text-white focus-visible:ring-2 focus-visible:ring-[#7ca8ff]"
+            >
+              Sync Ledger
+            </Link>
+            <SidebarQuickAccess />
           </div>
-          <Link to="/debate"
-            className="flex items-center gap-1 text-xs text-primary font-headline font-bold hover:opacity-80 transition-opacity">
-            Ver Todos los Debates
-            <span className="material-symbols-outlined text-sm">arrow_forward</span>
-          </Link>
         </div>
-
-        <StateWrapper loading={isLoading} error={error as Error | null} empty={debates.length === 0}
-          emptyMessage="No hay debates activos en este momento."
-          skeleton={
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...Array(6)].map((_, i) => <div key={i} className="bg-surface-container rounded-xl h-44 animate-pulse" />)}
+      }
+    >
+      <div className="space-y-6 lg:space-y-8">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="overflow-hidden rounded-3xl border border-white/6 bg-[#0d1528]">
+            <div
+              className="bg-cover bg-center p-6 md:p-8 xl:p-10"
+              style={{
+                backgroundImage:
+                  "linear-gradient(to right, rgba(11,17,30,0.88), rgba(11,17,30,0.55)), url('https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?auto=format&fit=crop&w=1600&q=80')",
+              }}
+            >
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="inline-flex rounded-full bg-amber-300/20 px-3 py-1 text-xs font-semibold tracking-[0.12em] text-amber-200">
+                LEDGER AUDITED: REAL-TIME
+              </motion.p>
+              <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="mt-5 max-w-3xl text-3xl font-black tracking-[-0.04em] sm:text-4xl md:text-5xl xl:text-[3.75rem]">
+                Arquitectura de Consenso: El Futuro del Protocolo Soberano.
+              </motion.h1>
+              <p className="mt-4 max-w-3xl text-base text-slate-300 md:text-lg">Unete al debate activo sobre redistribucion de nodos regionales en el estrato global. 1.2M votos verificados.</p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link to="/debate" className="rounded-xl bg-[#0052ff] px-7 py-3 font-semibold">Votar Ahora</Link>
+                <Link to="/rankings" className="rounded-xl bg-white/10 px-7 py-3 font-semibold">Ver Analisis</Link>
+              </div>
             </div>
-          }>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {debates.map((d) => (
-              <DebateCard key={d.id} debate={d} />
-            ))}
           </div>
-        </StateWrapper>
-      </div>
-    </div>
-  );
-}
 
-function DebateCard({ debate }: { debate: Debate }) {
-  const catColor = CATEGORY_COLORS[debate.category] ?? 'text-on-surface/50 bg-on-surface/5';
-  const isVerified = debate.status === 'FINALIZED' || debate.status === 'OPEN';
-  const votes = debate.totalVotes ?? debate.participantCount ?? 0;
+          <article className="rounded-3xl border border-white/6 bg-[#161f33] p-6">
+            <div className="mb-8 grid h-28 place-items-center rounded-2xl bg-white/5">
+              <div className="flex items-end gap-2">
+                <span className="h-9 w-7 rounded-t bg-slate-500/70" />
+                <span className="h-14 w-7 rounded-t bg-[#0052ff]" />
+                <span className="h-11 w-7 rounded-t bg-slate-600/60" />
+              </div>
+            </div>
+            <h3 className="text-4xl font-bold tracking-[-0.03em]">Estado del Ledger</h3>
+            <p className="mt-3 text-slate-400">Sincronizacion global alcanzada en Tier-1. Revision de Tier-2 en progreso.</p>
+            <div className="mt-8 space-y-3">
+              <div className="rounded-xl bg-white/5 px-3 py-2.5">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Bloque</p>
+                <p className="text-lg font-semibold text-amber-300">#882,192,001</p>
+              </div>
+              <div className="rounded-xl bg-white/5 px-3 py-2.5">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Estado</p>
+                <p className="text-lg font-semibold text-emerald-300">Finalizado</p>
+              </div>
+            </div>
+          </article>
+        </section>
 
-  return (
-    <Link to={`/debate/${debate.id}`}
-      className="group bg-surface-container hover:bg-surface-container-high rounded-xl p-5 border border-transparent hover:border-outline-variant/30 transition-all duration-200 flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex gap-2 flex-wrap">
-          <span className={`text-xs font-bold px-2 py-0.5 rounded font-headline uppercase tracking-wide ${catColor}`}>
-            {debate.category}
-          </span>
-          {debate.scope === 'GLOBAL' && (
-            <span className="text-xs font-bold px-2 py-0.5 rounded font-headline text-primary bg-primary/10">
-              🌐 Global
-            </span>
-          )}
-        </div>
-        {isVerified && (
-          <span className="text-secondary shrink-0">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-          </span>
-        )}
-      </div>
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {data?.stats.map((item) => <MetricTile key={item.label} {...item} />)}
+        </section>
 
-      <div>
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <span className="material-symbols-outlined text-sm text-on-surface/40">gavel</span>
-          <span className="text-xs text-on-surface/30 font-headline">ID: {debate.id.slice(0, 12).toUpperCase()}</span>
-        </div>
-        <h3 className="font-headline font-bold text-on-surface text-sm leading-snug group-hover:text-primary transition-colors" style={{ letterSpacing: '-0.01em' }}>
-          {debate.title}
-        </h3>
-        {debate.description && (
-          <p className="text-on-surface/50 text-xs mt-1.5 leading-relaxed line-clamp-2">{debate.description}</p>
-        )}
+        <section>
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-3xl font-bold tracking-[-0.03em] md:text-4xl">Muro de Debates Recientes</h2>
+              <p className="text-slate-400">Ultima actualizacion: hace 4 minutos.</p>
+            </div>
+            <Link to="/debate" className="hidden text-sm font-semibold text-[#2f8bff] md:block">Ver Todos los Debates</Link>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {filteredDebates.map((debate) => (
+              <motion.article whileHover={{ y: -4 }} key={debate.id} className="rounded-2xl border border-white/6 bg-[#161f33] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.15em] text-slate-500">ID: {debate.id}</p>
+                    <h3 className="mt-2 text-xl font-bold tracking-[-0.02em] sm:text-2xl">{debate.title}</h3>
+                  </div>
+                  <StatusBadge status={debate.status} />
+                </div>
+                <p className="mt-3 text-slate-300">{debate.description}</p>
+                <div className="mt-5 flex items-center justify-between gap-3">
+                  <span className="text-sm text-slate-400">Participantes: {debate.participants > 999 ? `${Math.round(debate.participants / 1000)}k` : debate.participants}</span>
+                  <div className="flex items-center gap-2">
+                    <button className="rounded-lg bg-white/8 px-4 py-2 text-sm font-semibold text-slate-200">Abstencion</button>
+                    <button className="rounded-lg bg-[#0052ff] px-4 py-2 text-sm font-semibold">Votar SI</button>
+                  </div>
+                </div>
+              </motion.article>
+            ))}
+            {filteredDebates.length === 0 && (
+              <p className="rounded-xl border border-white/8 bg-[#161f33] p-4 text-slate-400">No hay debates para el filtro seleccionado.</p>
+            )}
+          </div>
+        </section>
       </div>
-
-      <div className="flex items-center justify-between mt-auto pt-2 border-t border-outline-variant/10">
-        <span className="text-xs text-on-surface/40 font-headline">
-          +{votes > 999 ? `${(votes / 1000).toFixed(0)}k` : votes} {debate.status === 'OPEN' ? 'Abstención' : 'votos'}
-        </span>
-        <button className="text-xs font-headline font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1 rounded transition-all">
-          Votar SI
-        </button>
-      </div>
-    </Link>
+    </AppLayout>
   );
 }

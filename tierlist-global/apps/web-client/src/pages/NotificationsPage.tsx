@@ -1,150 +1,107 @@
-// src/pages/NotificationsPage.tsx
-// Fiel a: tierlist_notificaciones_de_logros
+import { useQuery } from "@tanstack/react-query";
+import { CheckCircle2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { AppLayout } from "../components/layout/AppLayout";
+import { SidebarQuickAccess } from "../components/ui";
+import { fetchNotifications } from "../services/api";
 
-import React from 'react';
-import { LedgerHash } from '../components/ui';
+export function NotificationsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { data } = useQuery({ queryKey: ["notifications"], queryFn: fetchNotifications, retry: 2 });
+  const activeSection = searchParams.get("section") ?? "all";
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
 
-const TRANSACTIONS = [
-  { ts: '2023-11-24 14:02:11', event: 'Reward Distribution: Consensus reached on #82,109', hash: '0xbfd3...7742' },
-  { ts: '2023-11-24 13:45:02', event: 'Multiplier Trigger: Activity burst detected (x2.5)', hash: '0xae44...119c' },
-  { ts: '2023-11-24 12:30:58', event: "Item Unlock: 'Sentinel of Data' rare skin applied",  hash: '0x992b...d33a' },
-];
+  const filteredItems = useMemo(() => {
+    const source = data ?? [];
+    if (activeSection === "all") {
+      return source;
+    }
+    return source.filter((item) => item.category === activeSection);
+  }, [activeSection, data]);
 
-const WEEKLY_BARS = [40, 60, 45, 80, 70, 55, 90]; // Mon–Sun
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const unreadCount = filteredItems.filter((item) => !dismissedIds.includes(item.id)).length;
 
-export default function NotificationsPage() {
   return (
-    <div className="min-h-full bg-surface">
-      <div className="max-w-4xl mx-auto px-4 py-6 lg:px-8 grid lg:grid-cols-[1fr_300px] gap-6">
-
-        {/* ── Left main ── */}
-        <div className="space-y-5">
-
-          {/* Multiplier card — fiel al screenshot */}
-          <div className="bg-surface-container rounded-xl p-5 border border-primary/20 relative overflow-hidden">
-            <div className="absolute inset-0 opacity-5"
-              style={{ background: 'radial-gradient(circle at top right, #0052ff, transparent 60%)' }} />
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="material-symbols-outlined text-base text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-                <span className="text-xs font-headline font-bold text-tertiary uppercase tracking-wide">
-                  Multiplicador de Actividad Activo x2.5 · Protocol Boost
-                </span>
-              </div>
-              <p className="text-on-surface/60 text-sm leading-relaxed mb-3">
-                Su participación en las TierLists de Gobernanza ha disparado su factor de recompensa. El multiplicador expira en{' '}
-                <span className="font-mono text-tertiary font-bold">04:22:15</span>.
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-headline text-on-surface/40">Transaction Hash</span>
-                <LedgerHash hash="0x88f2...9a21" full />
-                <button className="text-xs font-headline font-bold text-primary hover:opacity-80 transition-opacity uppercase tracking-wide flex items-center gap-1">
-                  AUDIT TRAIL
-                  <span className="material-symbols-outlined text-xs">open_in_new</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Consensus sealed */}
-          <div className="bg-surface-container rounded-xl p-4 border border-secondary/20">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="material-symbols-outlined text-base text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-              <span className="font-headline font-bold text-sm text-secondary">Consenso Alcanzado · Bloque #82,109 · Auditado</span>
-            </div>
-            <p className="text-on-surface/60 text-sm">
-              La TierList global de 'Seguridad Nacional' ha sido sellada por el protocolo. <span className="font-bold text-secondary">98.2% Acuerdo</span>
-            </p>
-          </div>
-
-          {/* Last rewards */}
+    <AppLayout
+      leftSidebar={
+        <div className="flex h-full flex-col justify-between rounded-2xl border border-white/6 bg-[#0f1829] p-4">
           <div>
-            <p className="text-xs font-headline font-bold uppercase tracking-widest text-on-surface/30 mb-3">Últimas Recompensas</p>
-            <div className="space-y-2">
+            <h2 className="text-2xl font-black tracking-[-0.03em]">Centro de Alertas</h2>
+            <p className="text-xs uppercase tracking-[0.15em] text-[#2a7eff]">Eventos de Cuenta</p>
+            <div className="mt-8 space-y-2">
               {[
-                { icon: 'deployed_code', color: 'text-primary bg-primary/10', label: 'Nuevo Objeto Desbloqueado', time: 'Hace 2m', desc: 'Avatar: Centinela de Datos', hash: 'c022...f9e1' },
-                { icon: 'military_tech', color: 'text-tertiary bg-tertiary/10', label: 'Ascenso de Rango', time: 'Hace 1h', desc: 'Auditor de Clase III', hash: '' },
-              ].map((r) => (
-                <div key={r.label} className="flex items-start gap-3 bg-surface-container rounded-xl p-4 border border-outline-variant/10">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${r.color}`}>
-                    <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>{r.icon}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-headline font-bold text-sm text-on-surface">{r.label}</p>
-                      <span className="text-xs text-on-surface/30 font-headline shrink-0">{r.time}</span>
-                    </div>
-                    <p className="text-xs text-on-surface/50 mt-0.5">{r.desc}</p>
-                    {r.hash && (
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-xs text-on-surface/30 font-headline font-mono">HASH: {r.hash}</span>
-                        <button className="text-xs text-primary font-headline font-bold hover:opacity-80 transition-opacity">Ver Audit</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                { label: "Todas", key: "all", to: "/notifications" },
+                { label: "Sistema", key: "system", to: "/notifications?section=system" },
+                { label: "Debates", key: "debates", to: "/notifications?section=debates" },
+                { label: "Transferencias", key: "transfer", to: "/notifications?section=transfer" },
+              ].map((item) => (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  onClick={() => setSearchParams(item.key === "all" ? {} : { section: item.key })}
+                  className={`sidebar-action block w-full rounded-xl px-4 py-3 text-left ${activeSection === item.key ? "sidebar-action-active bg-[#0052ff]/20 text-[#60abff]" : "text-slate-300 hover:bg-white/5"}`}
+                >
+                  {item.label}
+                </Link>
               ))}
             </div>
           </div>
-
-          {/* Transaction log table — fiel al screenshot */}
-          <div>
-            <p className="text-xs font-headline font-bold uppercase tracking-widest text-on-surface/30 mb-3">Registro de Transacciones Recientes</p>
-            <div className="bg-surface-container rounded-xl overflow-hidden border border-outline-variant/10">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-outline-variant/10">
-                    {['Timestamp', 'Evento de Protocolo', 'Hash de Bloque', 'Acción'].map((h) => (
-                      <th key={h} className="px-3 py-2.5 text-left text-xs font-headline font-bold text-on-surface/30 uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {TRANSACTIONS.map((tx, i) => (
-                    <tr key={i} className="border-b border-outline-variant/5 hover:bg-surface-container-high transition-colors">
-                      <td className="px-3 py-2.5 text-xs font-mono text-on-surface/40 whitespace-nowrap">{tx.ts}</td>
-                      <td className="px-3 py-2.5 text-xs text-on-surface/70 max-w-xs">{tx.event}</td>
-                      <td className="px-3 py-2.5"><LedgerHash hash={tx.hash} /></td>
-                      <td className="px-3 py-2.5">
-                        <button className="text-xs font-headline font-bold text-primary hover:opacity-80 transition-opacity">Audit Trail</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="space-y-3">
+            <Link to="/transfer" className="block w-full rounded-xl bg-[#0052ff] py-3 text-center font-semibold">Ir a Transferencias</Link>
+            <SidebarQuickAccess />
           </div>
         </div>
-
-        {/* ── Right sidebar ── */}
-        <div className="space-y-4">
-          {/* User card */}
-          <div className="bg-surface-container rounded-xl p-4 border border-outline-variant/10 text-center">
-            <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-              <span className="material-symbols-outlined text-primary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>account_circle</span>
+      }
+    >
+      <div className="space-y-6">
+        <header className="rounded-2xl border border-white/6 bg-[#161f33] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-black tracking-[-0.03em] md:text-4xl">Notificaciones</h1>
+              <p className="mt-2 text-sm text-slate-300">Avisos recientes de debates, sistema y transferencias.</p>
             </div>
-            <p className="font-headline font-bold text-on-surface text-sm">Usuario de la Legión</p>
-            <p className="text-xs text-primary font-headline font-bold">Nivel 42 · Sovereign Ledger</p>
+            <div className="rounded-xl border border-white/10 bg-[#0e1627] px-4 py-3 text-right">
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Sin leer</p>
+              <p className="text-2xl font-black text-white">{unreadCount}</p>
+            </div>
           </div>
+        </header>
 
-          {/* Weekly chart — fiel al screenshot */}
-          <div className="bg-surface-container rounded-xl p-4 border border-outline-variant/10">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-headline font-bold uppercase tracking-widest text-on-surface/30">Métricas de Recompensa</p>
-              <span className="text-xs font-headline font-bold text-secondary">+14.2% Global Yield</span>
-            </div>
-            <div className="flex items-end gap-1 h-16">
-              {WEEKLY_BARS.map((h, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                  <div className="w-full rounded-t" style={{ height: `${h}%`, background: h === Math.max(...WEEKLY_BARS) ? '#0052ff' : '#242a39' }} />
-                  <span className="text-xs text-on-surface/20 font-headline">{DAYS[i]}</span>
+        <section className="rounded-2xl border border-white/6 bg-[#161f33] p-6">
+          <div className="mb-4 flex justify-between">
+            <h3 className="text-2xl font-bold tracking-[-0.03em]">Actividad Reciente</h3>
+            <button
+              type="button"
+              onClick={() => setDismissedIds(filteredItems.map((item) => item.id))}
+              className="text-sm uppercase tracking-[0.12em] text-slate-300"
+            >
+              Marcar todas como leidas
+            </button>
+          </div>
+          <div className="space-y-3">
+            {filteredItems.map((item) => (
+              <div
+                key={item.id}
+                className={`flex items-center justify-between gap-3 rounded-xl p-4 ${dismissedIds.includes(item.id) ? "bg-[#1c2640]/45" : "bg-[#1c2640]"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+                  <div>
+                    <p className="text-base font-semibold md:text-lg">{item.label}</p>
+                    <p className="text-xs text-slate-400">{item.date}</p>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-emerald-300">{item.status}</p>
+                  <p className="text-xs text-slate-400">{item.tx}</p>
+                </div>
+              </div>
+            ))}
+            {filteredItems.length === 0 && <p className="rounded-xl bg-[#1c2640] p-4 text-slate-400">No hay notificaciones en esta seccion.</p>}
           </div>
-        </div>
+        </section>
       </div>
-    </div>
+    </AppLayout>
   );
 }
